@@ -1,0 +1,76 @@
+
+
+.aviso-cookies {
+	display: none;
+	background: #f5f6fa;
+	color: #444444;
+	border-radius: 10px;
+	position: fixed;
+	bottom: 10px;
+	width:75%;
+	z-index: 601;
+	left: 20px;
+	box-shadow: 0px 2px 20px 10px rgba(222,222,222,.25);
+	text-align: justify;
+	
+}
+.aviso-cookies .parrafo {
+	margin-left: 55px;
+	margin-right: 55px;
+	font-family: 'Roboto', sans-serif;
+}
+.aviso-cookies.activo {
+	display: block;
+}
+
+.aviso-cookies .boton {
+  width: 80%;
+  background: #D3D3D3;
+  
+  font-family: 'Roboto', sans-serif;
+  padding: 15px 5px;
+  color: #444444;
+  font-size: 14px;
+  transition: .3s ease all;
+  border-radius: 10px;
+  cursor: pointer;
+  font-weight: 700;
+  border-color:#855d37;
+	
+  
+  
+  
+  
+}
+
+.aviso-cookies .boton:hover {
+	background: #B6B3B3;
+}
+
+.aviso-cookies .enlace {
+	color: #444444;
+	text-decoration: none;
+	font-size: 15px;
+	font-weight: 600;
+}
+
+.aviso-cookies .enlace:hover {
+	text-decoration: underline;
+}
+
+.fondo-aviso-cookies {
+	display: none;
+	background: rgba(0,0,0,.20);
+	position: fixed;
+	z-index: 600;
+	width: 100vw;
+	height: 100vh;
+	top: 0;
+	left: 0;
+	backdrop-filter: blur(4px);
+	
+}
+
+.fondo-aviso-cookies.activo {
+	display: block;
+}

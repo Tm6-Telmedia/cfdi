@@ -1,0 +1,104 @@
+[
+  {
+    "d_url": "/tm/ssi/terminosuso.shtml",
+    "d_descripcion": "",
+    "d_nombre_sku": "Políticas - Términos de uso de Telmedia",
+    "img": "/tm/assets/img/buscador/Terminos_de_uso.png"
+  },
+  {
+    "d_url": "/tm/ssi/avisoprivacidad.shtml",
+    "d_descripcion": "",
+    "d_nombre_sku": "Políticas - Aviso de privacidad de Telmedia",
+    "img": "/tm/assets/img/buscador/Aviso_de_privacidad.png"
+  },
+  {
+    "d_url": "/tm/ssi/codigoconducta.shtml",
+    "d_descripcion": "",
+    "d_nombre_sku": "Políticas - Código de conducta de Telmedia",
+    "img": "/tm/assets/img/buscador/Codigo_de_conducta.png"
+  },
+  {
+    "d_url": "/tm/ssi/preguntas_frecuentes.shtml",
+    "d_descripcion": "",
+    "d_nombre_sku": "Envío - Preguntas frecuentes sobre envíos",
+    "img": "/tm/assets/img/buscador/Preguntas_frecuentes.png"
+  },
+  {
+    "d_url": "/tm/ssi/formregistro.shtml",
+    "d_descripcion": "",
+    "d_nombre_sku": "Contacto - Formulario de registro de Telmedia",
+    "img": "/tm/assets/img/buscador/Contacto.png"
+  },
+  {
+    "d_url": "/tm/ssi/soporte.shtml",
+    "d_descripcion": "",
+    "d_nombre_sku": "Servicios - Soporte de Telmedia",
+    "img": "/tm/assets/img/buscador/Servicios.png"
+  },
+  {
+    "d_url": "https://store.telmedia.com.mx/?_gl=1*12v8mi8*_ga*MTQ1ODM3MDYxMi4xNjc3Njk2Njkw*_ga_6YKQTXBV5H*MTc0MjM5MzUyMi45Mi4wLjE3NDIzOTM1MjMuNTkuMC4w",
+    "d_descripcion": "",
+    "d_nombre_sku": "Tienda - Plataforma de compra en línea de Telmedia",
+    "img": "/tm/assets/img/buscador/Tienda.png"
+  },
+  {
+    "d_url": "https://store.telmedia.com.mx/?_gl=1*12v8mi8*_ga*MTQ1ODM3MDYxMi4xNjc3Njk2Njkw*_ga_6YKQTXBV5H*MTc0MjM5MzUyMi45Mi4wLjE3NDIzOTM1MjMuNTkuMC4w",
+    "d_descripcion": "",
+    "d_nombre_sku": "Cotización - Solicitud de cotizaciones en la tienda de Telmedia",
+    "img": "/tm/assets/img/buscador/Cotizacion.png"
+  },
+  {
+    "d_url": "/productos/index.shtml",
+    "d_descripcion": "",
+    "d_nombre_sku": "Catálogo - Listado de productos de Telmedia",
+    "img": "/tm/assets/img/buscador/"
+  },
+  {
+    "d_url": "/productos/redes%20lan/index.shtml",
+    "d_descripcion": "",
+    "d_nombre_sku": "Redes - Soluciones LAN de Telmedia",
+    "img": "/tm/assets/img/buscador/Redes.png"
+  },
+  {
+    "d_url": "/productos/cloud/index.shtml",
+    "d_descripcion": "",
+    "d_nombre_sku": "Nube - Soluciones en la nube de Telmedia",
+    "img": "/tm/assets/img/buscador/Nube.png"
+  },
+  {
+    "d_url": "/productos/centro%20de%20datos/index.shtml",
+    "d_descripcion": "",
+    "d_nombre_sku": "Centro de Datos - Infraestructura de Telmedia",
+    "img": "/tm/assets/img/buscador/Centro_de_datos.png"
+  },
+  {
+    "d_url": "/productos/videovigilancia%20y%20seguridad/index.shtml",
+    "d_descripcion": "",
+    "d_nombre_sku": "Videovigilancia - Soluciones de seguridad de Telmedia",
+    "img": "/tm/assets/img/buscador/Videovigilancia_de_datos.png"
+  },
+  {
+    "d_url": "/productos/audio/index.shtml",
+    "d_descripcion": "",
+    "d_nombre_sku": "Audio - Soluciones de sonido profesional de Telmedia",
+    "img": "/tm/assets/img/buscador/Audio.png"
+  },
+  {
+    "d_url": "/productos/cableado/index.shtml",
+    "d_descripcion": "",
+    "d_nombre_sku": "Cableado - Productos de infraestructura de Telmedia",
+    "img": "/tm/assets/img/buscador/Cableado.png"
+  },
+  {
+    "d_url": "/productos/energ%C3%ADa/index.shtml",
+    "d_descripcion": "",
+    "d_nombre_sku": "Energía - Soluciones energéticas de Telmedia",
+    "img": "/tm/assets/img/buscador/Energia.png"
+  },
+  {
+    "d_url": "/productos/herramientas/index.shtml",
+    "d_descripcion": "",
+    "d_nombre_sku": "Herramientas - Equipos y accesorios de Telmedia",
+    "img": "/tm/assets/img/buscador/Herramientas.png"
+  }
+]

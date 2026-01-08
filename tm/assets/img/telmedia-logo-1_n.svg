@@ -1,0 +1,21 @@
+<?xml version="1.0" standalone="no"?>
+<!DOCTYPE svg PUBLIC "-//W3C//DTD SVG 20010904//EN"
+ "http://www.w3.org/TR/2001/REC-SVG-20010904/DTD/svg10.dtd">
+<svg version="1.0" xmlns="http://www.w3.org/2000/svg"
+  width="320.000000pt" height="120.000000pt" viewBox="80 0 790.000000 370.000000"
+ preserveAspectRatio="xMidYMid meet">
+   
+<g transform="translate(670.000000,320.000000) scale(0.100000,-0.100000)"
+fill="#000000" stroke="none">
+<path style="fill: #115E87;" d="M1522 2590 c-202 -92 -459 -623 -697 -1445 -57 -197 -115 -413 -115
+-430 0 -3 30 -5 66 -3 l67 3 67 160 c263 630 518 928 705 822 106 -60 354
+-418 654 -944 l92 -163 65 0 c35 0 64 3 64 8 0 4 -18 79 -41 167 -189 747
+-415 1369 -597 1641 -122 182 -217 235 -330 184z m85 -70 c18 -11 54 -48 79
+-82 57 -78 184 -335 259 -528 99 -252 365 -1073 352 -1086 -2 -2 -41 57 -86
+131 -354 582 -607 866 -748 840 -155 -28 -333 -246 -539 -659 -57 -115 -104
+-203 -104 -196 0 26 82 298 164 545 226 678 428 1055 566 1055 14 0 40 -9 57
+-20z"/>
+</g>
+    <text style="fill: #333333;" x="10" y="240" fill="black" font-size="190" text-anchor="start" font-family="Helvetica">telmedia</text>
+
+</svg>

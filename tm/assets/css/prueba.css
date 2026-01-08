@@ -1,0 +1,23 @@
+.banner-tm-top {
+    /* url for top background image here */
+    background: #e4e0db url('../img/banner/2.jpg') no-repeat center;
+    -webkit-background-size: cover;
+    background-size: cover;
+    height: 440px; }
+     @media (max-width: 768px) {
+      .portfoli2-home-top {
+        background-image: none;
+        background: #e4e0db url('../img/banner/2.jpg') no-repeat top;
+        height: auto; } }
+    /* @media (min-width: 1630px) {
+      .portfoli2-home-top {
+        background: #e4e0db url('../img/home/bg-studio.jpg') no-repeat center;
+        -webkit-background-size: contain;
+        background-size: contain; } }
+  */
+  
+  @media (min-width: 1630px) {
+    .page-wrap.boxed .portfoli2-home-top {
+      -webkit-background-size: cover;
+      background-size: cover; } }
+  

@@ -1,0 +1,232 @@
+.search-content {
+    padding: 1rem;
+    border: 1px solid #999;
+}
+
+.item {
+    padding: 1rem;
+    border: 1px solid red;
+}
+
+/* From Uiverse.io by satyamchaudharydev */
+/* this is a recreation of twitter search in css */
+.form-search {
+    --input-text-color: #727272;
+    --input-bg-color: #ffffff;
+    --focus-input-bg-color: transparent;
+    --text-color: #949faa;
+    --active-color: #1b9bee;
+    --width-of-input: 200px;
+    --inline-padding-of-input: 1.2em;
+    --gap: 0.9rem;
+}
+
+/* form style */
+.form-search {
+    font-size: 0.9rem;
+    display: flex;
+    gap: 0.5rem;
+    align-items: center;
+    width: var(--width-of-input);
+    position: relative;
+    isolation: isolate;
+}
+
+/* a fancy bg for showing background and border when focus. */
+.fancy-bg {
+    position: absolute;
+    width: 100%;
+    inset: 0;
+    background: var(--input-bg-color);
+    border-radius: 10px;
+    height: 100%;
+    z-index: -1;
+    pointer-events: none;
+    box-shadow: rgba(0, 0, 0, 0.16) 0px 1px 4px;
+}
+
+
+
+.search-content,
+.close-btn {
+    position: absolute;
+}
+
+/* styling search-icon */
+.search-content {
+    fill: var(--text-color);
+    left: var(--inline-padding-of-input);
+}
+
+/* svg -- size */
+.close-btn svg {
+    width: 17px;
+    display: block;
+}
+
+/* styling of close button */
+.close-btn {
+    border: none;
+    right: var(--inline-padding-of-input);
+    box-sizing: border-box;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: #fff;
+    padding: 0.1em;
+    width: 20px;
+    height: 20px;
+    border-radius: 80%;
+    background: var(--active-color);
+    opacity: 0;
+    visibility: hidden;
+}
+
+/* styling of input */
+.input-search {
+    color: var(--input-text-color);
+    width: 100%;
+    margin-inline: min(2em, calc(var(--inline-padding-of-input) + var(--gap)));
+    background: none;
+    border: none;
+}
+
+.input-search:focus {
+    outline: none;
+    color: var(--input-bg-color)
+}
+
+.input-search::placeholder {
+    color: var(--text-color)
+}
+
+/* input background change in focus */
+.input-search:focus~.fancy-bg {
+    border: 1px solid var(--active-color);
+    background: var(--focus-input-bg-color);
+}
+
+/* search icon color change in focus */
+.input-search:focus~.search {
+    fill: var(--active-color);
+}
+
+/* showing close button when typing */
+.input-search:valid~.close-btn {
+    opacity: 1;
+    visibility: visible;
+}
+
+/* this is for the default background in input,when selecting autofill options -- you can remove this code if you do not want to override the browser style.  */
+.input-search:-webkit-autofill,
+.input-search:-webkit-autofill:hover,
+.input-search:-webkit-autofill:focus,
+.input-search:-webkit-autofill:active {
+    -webkit-transition: "color 9999s ease-out, background-color 9999s ease-out";
+    -webkit-transition-delay: 9999s;
+}
+
+.modal {
+    display: block;
+    /* Se oculta por defecto */
+    position: fixed;
+    /* Se mantiene en la pantalla */
+    z-index: 100000;
+    /* Se posiciona por encima de otros elementos */
+    left: 0;
+    top: 0;
+    width: 100%;
+    /* Ancho completo */
+    height: 100%;
+    /* Alto completo */
+    overflow: auto;
+    /* Habilitar scroll si es necesario */
+    background-color: rgba(0, 0, 0, 0.5);
+    /* Fondo semi-transparente */
+}
+
+/* Contenido del modal */
+.modal-content {
+    background-color: #fff;
+    margin: 10% auto;
+    /* Centrado vertical y horizontal */
+    padding: 20px;
+    border: 1px solid #888;
+    width: 100%;
+    /* Ancho del contenido */
+    max-width: 70vw;
+    position: relative;
+    border-radius: 4px;
+}
+
+/* Botón de cerrar (X) */
+.close {
+    color: #aaa;
+    position: absolute;
+    top: 10px;
+    right: 15px;
+    font-size: 28px;
+    font-weight: bold;
+    cursor: pointer;
+    transition: color 0.3s ease;
+}
+
+.close:hover,
+.close:focus {
+    color: #000;
+}
+
+.hoverGray {
+    transition-duration: .4s;
+}
+
+.hoverGray:hover {
+    background-color: #f1eeee;
+}
+
+.search-label {
+    display: flex;
+    font-size: x-small;
+    margin-bottom: 0px;
+    font-weight: 200;
+    
+    width: 100%;
+    padding: 0.2em;
+    height: 40px;
+    padding-inline: var(--inline-padding-of-input);
+    display: flex;
+    align-items: center;
+}
+/* Paginación */
+.pagination {
+    display: flex;
+    justify-content: center;
+    list-style: none;
+    padding: 10px;
+    width: 100%;
+}
+
+.pagination li {
+    margin: 0 5px;
+}
+
+.pagination a {
+    text-decoration: none;
+    color: #007bff;
+    padding: 8px 12px;
+    border: 1px solid #375F85;
+    border-radius: 5px;
+    transition: all 0.3s ease;
+    cursor: pointer;
+}
+
+.pagination a:hover, .pagination .active {
+    background-color: #375F85;
+    color: white;
+}
+
+.disabled {
+    color: #aaa;
+    border-color: #ccc;
+    cursor: not-allowed;
+}
