@@ -1,529 +1,72 @@
 <!DOCTYPE html>
 <html lang="es">
+
 <head>
-<meta charset="UTF-8">
-<title>TIMBRADO</title>
-<style>
-body { font-family: Arial; background:#f2f2f2; margin:0; padding:0; }
-.contenedor { background:#dedede; padding:20px; text-align:center; }
-.hidden { display:none; }
-.faltantes { background:#fff; padding:15px; margin-top:20px; border-radius:6px; }
-label { display:block; margin-top:8px; text-align:center; }
-input[type=text] { width:100%; padding:5px; margin-top:3px; }
-input[type=file] { margin:10px auto; display:block; }
-.file-input-wrapper { position:relative; display:inline-block; }
-.file-input-custom { 
-    margin-top:10px; 
-    padding:5px 10px; 
-    cursor:pointer; 
-    display:block; 
-    margin-left:auto; 
-    margin-right:auto; 
-    background:#f9f9f9; 
-    border:1px solid #999; 
-}
-.file-input-hidden { 
-    position:absolute; 
-    left:-9999px; 
-}
-.file-name { 
-    margin-top:10px; 
-    font-style:italic; 
-    color:#666; 
-    text-align:center; 
-}
-button { margin-top:10px; padding:5px 10px; cursor:pointer; display:block; margin-left:auto; margin-right:auto; }
-.errorCampo { border:2px solid red !important; }
-h2 { text-align:center; }
-h3 { text-align:center; }
-</style>
+    <meta charset="UTF-8">
+    <title>TIMBRADO</title>
+    <link rel="stylesheet" href="tm/assets/css/timbrado.css">
 </head>
+
 <body>
-<div class="contenedor">
-<h2>TIMBRADO</h2>
+    <div class="contenedor">
+        <h2>TIMBRADO</h2>
 
-<label>Selecciona tipo:</label>
-<select id="tipoTimbrado" class="placeholder" required>
-    <option value="" disabled selected hidden>Selecciona tipo...</option>
-    <option value="anticipo">Aplicación de Anticipo</option>
-    <option value="complemento">Complemento de Pago</option>
-</select>
+        <label>Selecciona tipo:</label>
+        <select id="tipoTimbrado" class="placeholder" required>
+            <option value="" disabled selected >Selecciona tipo...</option>
+            <option value="anticipo">Aplicación de Anticipo</option>
+            <option value="complemento">Complemento de Pago</option>
+        </select>
 
-<div id="formaPagoSection" class="hidden">
-    <label>Forma de pago:</label>
-    <select id="formaPago" class="placeholder" required>
-        <option value="" disabled selected hidden>Selecciona forma de pago...</option>
-        <option value="02">02: Cheque nominativo</option>
-        <option value="03">03: Transferencia electrónica de fondos (PUE o PPD)</option>
-        <option value="04">04: Tarjeta de crédito</option>
-        <option value="28">28: Tarjeta de débito</option>
-        <option value="99">99: Por definir (usualmente con PPD)</option>
-    </select>
-</div>
-
-<button id="btnContinuarTimbrado">Continuar</button>
-
-<style>
-select.placeholder:invalid {
-    color: transparent; /* Se ve vacío */
-}
-
-select.placeholder option {
-    color: black; 
-}
-</style>
-
-<div id="subirXMLSection" class="hidden">
-    <div id="xmlUnicoSection">
-        <label><b>Subir factura (XML):</b></label>
-        <div class="file-input-wrapper">
-            <input type="file" id="xmlFile" accept=".xml" class="file-input-hidden">
-            <label for="xmlFile" class="file-input-custom">Seleccionar archivo</label>
+        <div id="formaPagoSection" class="hidden">
+            <label>Forma de pago:</label>
+            <select id="formaPago" class="placeholder" required>
+                <option value="" disabled selected hidden>Selecciona forma de pago...</option>
+                <option value="02">02: Cheque nominativo</option>
+                <option value="03">03: Transferencia electrónica de fondos (PUE o PPD)</option>
+                <option value="04">04: Tarjeta de crédito</option>
+                <option value="28">28: Tarjeta de débito</option>
+                <option value="99">99: Por definir (usualmente con PPD)</option>
+            </select>
         </div>
-        <div id="fileName" class="file-name"></div>
+
+        <button id="btnContinuarTimbrado">Continuar</button>
+
+        <div id="subirXMLSection" class="hidden">
+            <div id="xmlUnicoSection">
+                <label><b>Subir factura (XML):</b></label>
+                <div class="file-input-wrapper">
+                    <input type="file" id="xmlFile" accept=".xml" class="file-input-hidden">
+                    <label for="xmlFile" class="file-input-custom">Seleccionar archivo</label>
+                </div>
+                <div id="fileName" class="file-name"></div>
+            </div>
+
+            <div id="xmlAnticipoSection" class="hidden">
+                <label><b>Subir Primer XML:</b></label>
+                <div class="file-input-wrapper">
+                    <input type="file" id="xmlProductos" accept=".xml" class="file-input-hidden">
+                    <label for="xmlProductos" class="file-input-custom">Seleccionar Primer XML</label>
+                </div>
+                <div id="fileNameProductos" class="file-name"></div>
+                 <div>
+                    <button id="validarCFDI">Validar CFDI</button>
+                </div>
+
+                <label><b>Subir Segundo XML:</b></label>
+                <div class="file-input-wrapper">
+                    <input type="file" id="xmlAplicacion" accept=".xml" class="file-input-hidden">
+                    <label for="xmlAplicacion" class="file-input-custom">Seleccionar Segundo XML</label>
+                </div>
+                <div id="fileNameAplicacion" class="file-name"></div>
+            </div>
+
+            <button id="procesarXML">SELLAR Y TIMBRAR</button>
+        </div>
+
+        <div id="mensajesValidacion"></div>
     </div>
-    
-    <div id="xmlAnticipoSection" class="hidden">
-        <label><b>Subir Primer XML:</b></label>
-        <div class="file-input-wrapper">
-            <input type="file" id="xmlProductos" accept=".xml" class="file-input-hidden">
-            <label for="xmlProductos" class="file-input-custom">Seleccionar Primer XML</label>
-        </div>
-        <div id="fileNameProductos" class="file-name"></div>
-        
-        <label><b>Subir Segundo XML:</b></label>
-        <div class="file-input-wrapper">
-            <input type="file" id="xmlAplicacion" accept=".xml" class="file-input-hidden">
-            <label for="xmlAplicacion" class="file-input-custom">Seleccionar Segundo XML</label>
-        </div>
-        <div id="fileNameAplicacion" class="file-name"></div>
-    </div>
-    
-    <button id="procesarXML">SELLAR Y TIMBRAR</button>
-</div>
 
-<div id="faltantesSection" class="hidden faltantes">
-    <h3>Datos faltantes</h3>
-    <div id="faltantesCampos"></div>
-    <button id="btnGuardarDatos">Guardar y Timbre Automático</button>
-</div>
-</div>
-
-<script>
-let xmlOriginal = null;
-
-// VALIDACIONES 
-function validarRFC(rfc) {
-    const regex = /^([A-ZÑ&]{3,4})(\d{6})([A-Z0-9]{3})$/i;
-    return regex.test(rfc);
-}
-
-function validarNombre(nom){
-    return nom.trim().length > 0;
-}
-
-function validarCP(cp){
-    return /^[0-9]{5}$/.test(cp);
-}
-
-function validarRegimen(reg){
-    return /^[0-9]{3}$/.test(reg);
-}
-
-function validarUsoCFDI(uso){
-    return uso.trim() !== "";
-}
-
-// MOSTRAR/OCULTAR FORMA DE PAGO Y SECCIONES XML SEGÚN TIPO SELECCIONADO
-document.getElementById("tipoTimbrado").onchange = function() {
-    const tipoSeleccionado = this.value;
-    const formaPagoSection = document.getElementById("formaPagoSection");
-    const formaPagoSelect = document.getElementById("formaPago");
-    
-    if (tipoSeleccionado === "complemento") {
-        // Mostrar forma de pago para complemento de pago
-        formaPagoSection.classList.remove("hidden");
-        formaPagoSelect.required = true;
-    } else if (tipoSeleccionado === "anticipo") {
-        // Ocultar forma de pago para aplicación de anticipo
-        formaPagoSection.classList.add("hidden");
-        formaPagoSelect.required = false;
-        formaPagoSelect.value = "99"; // Valor fijo para anticipo (Por definir)
-    }
-};
-
-//CONTINUAR 
-document.getElementById("btnContinuarTimbrado").onclick = () => {
-    const tipoSeleccionado = document.getElementById("tipoTimbrado").value;
-    
-    if(!tipoSeleccionado){
-        alert("Selecciona un tipo.");
-        return;
-    }
-    
-    // Solo validar forma de pago si es complemento de pago
-    if(tipoSeleccionado === "complemento" && !document.getElementById("formaPago").value){
-        alert("Selecciona una forma de pago.");
-        return;
-    }
-    
-    // Mostrar sección de subir XML
-    document.getElementById("subirXMLSection").classList.remove("hidden");
-    
-    // Mostrar/ocultar secciones según el tipo
-    const xmlUnicoSection = document.getElementById("xmlUnicoSection");
-    const xmlAnticipoSection = document.getElementById("xmlAnticipoSection");
-    
-    if (tipoSeleccionado === "anticipo") {
-        // Para anticipo: mostrar sección de dos XMLs
-        xmlUnicoSection.classList.add("hidden");
-        xmlAnticipoSection.classList.remove("hidden");
-    } else {
-        // Para complemento: mostrar sección de un XML
-        xmlUnicoSection.classList.remove("hidden");
-        xmlAnticipoSection.classList.add("hidden");
-    }
-};
-
-// MOSTRAR NOMBRE DEL ARCHIVO
-document.getElementById("xmlFile").onchange = function() {
-    const archivo = this.files[0];
-    const fileNameDiv = document.getElementById("fileName");
-    if(archivo) {
-        fileNameDiv.textContent = archivo.name;
-    } else {
-        fileNameDiv.textContent = "";
-    }
-};
-
-// MOSTRAR NOMBRES DE ARCHIVOS PARA ANTICIPO
-document.getElementById("xmlProductos").onchange = function() {
-    const archivo = this.files[0];
-    const fileNameDiv = document.getElementById("fileNameProductos");
-    if(archivo) {
-        fileNameDiv.textContent = archivo.name;
-    } else {
-        fileNameDiv.textContent = "";
-    }
-};
-
-document.getElementById("xmlAplicacion").onchange = function() {
-    const archivo = this.files[0];
-    const fileNameDiv = document.getElementById("fileNameAplicacion");
-    if(archivo) {
-        fileNameDiv.textContent = archivo.name;
-    } else {
-        fileNameDiv.textContent = "";
-    }
-};
-
-// PROCESAR XML 
-document.getElementById("procesarXML").onclick = () => {
-    const tipoSeleccionado = document.getElementById("tipoTimbrado").value;
-    
-    if (tipoSeleccionado === "anticipo") {
-        // Para anticipo: validar que se hayan subido ambos XMLs
-        const archivoProductos = document.getElementById("xmlProductos").files[0];
-        const archivoAplicacion = document.getElementById("xmlAplicacion").files[0];
-        
-        if(!archivoProductos){ 
-            alert("Sube el Primer XML."); 
-            return; 
-        }
-        
-        if(!archivoAplicacion){ 
-            alert("Sube el Segundo XML."); 
-            return; 
-        }
-        
-        // Procesar ambos XMLs para anticipo
-        procesarXMLsAnticipo(archivoProductos, archivoAplicacion);
-        
-    } else {
-        // Para complemento: validar un solo XML
-        const archivo = document.getElementById("xmlFile").files[0];
-        if(!archivo){ 
-            alert("Sube un XML."); 
-            return; 
-        }
-        
-        // Procesar XML único
-        procesarXMLUnico(archivo);
-    }
-};
-
-// PROCESAR XML ÚNICO (COMPLEMENTO DE PAGO)
-function procesarXMLUnico(archivo) {
-    const lector = new FileReader();
-    lector.onload = e => {
-        const parser = new DOMParser();
-        const xml = parser.parseFromString(e.target.result, "text/xml");
-        xmlOriginal = xml;
-        procesarDatosFaltantes(xml);
-    };
-    lector.readAsText(archivo);
-}
-
-// PROCESAR XMLs DE ANTICIPO
-function procesarXMLsAnticipo(archivoProductos, archivoAplicacion) {
-    let xmlProductos = null;
-    let xmlAplicacion = null;
-    let procesados = 0;
-    
-    // Leer XML de productos
-    const lectorProductos = new FileReader();
-    lectorProductos.onload = e => {
-        const parser = new DOMParser();
-        xmlProductos = parser.parseFromString(e.target.result, "text/xml");
-        procesados++;
-        
-        if (procesados === 2) {
-            // Ambos XMLs procesados, usar el de productos como principal
-            xmlOriginal = xmlProductos;
-            procesarDatosFaltantes(xmlProductos);
-        }
-    };
-    lectorProductos.readAsText(archivoProductos);
-    
-    // Leer XML de aplicación
-    const lectorAplicacion = new FileReader();
-    lectorAplicacion.onload = e => {
-        const parser = new DOMParser();
-        xmlAplicacion = parser.parseFromString(e.target.result, "text/xml");
-        procesados++;
-        
-        if (procesados === 2) {
-            // Ambos XMLs procesados, usar el de productos como principal
-            xmlOriginal = xmlProductos;
-            procesarDatosFaltantes(xmlProductos);
-        }
-    };
-    lectorAplicacion.readAsText(archivoAplicacion);
-}
-
-// PROCESAR DATOS FALTANTES (COMÚN PARA AMBOS TIPOS)
-function procesarDatosFaltantes(xml) {
-    let faltan = [];
-    const todosElementos = xml.getElementsByTagName("*");
-
-    for(let el of todosElementos){
-        for(let attr of el.attributes){
-            let esPlantilla = attr.value.includes("{{");
-            let esVacio = attr.value.trim() === "";
-            let sinComillas = (
-                esVacio &&
-                !el.outerHTML.includes(attr.name + "=\"")
-            );
-
-            if(esPlantilla || esVacio || sinComillas){
-                faltan.push({
-                    elemento: el,
-                    attr: attr.name,
-                    valor: attr.value
-                });
-            }
-        }
-    }
-
-    if(faltan.length===0){
-        alert("XML COMPLETO: Enviado a timbrar.");
-        enviarParaTimbrar(xmlOriginal);
-        return;
-    }
-
-    let html="";
-    faltan.forEach(f=>{
-        html += `<label>${f.attr}</label>
-     <input type="text" data-campo="${f.attr}" value="">`;
-    });
-
-    document.getElementById("faltantesCampos").innerHTML = html;
-    document.getElementById("faltantesSection").classList.remove("hidden");
-}
-
-// GUARDAR DATOS 
-document.getElementById("btnGuardarDatos").onclick = () => {
-
-    const inputs = document.querySelectorAll("#faltantesCampos input");
-    let errores = [];
-
-    inputs.forEach(input => input.classList.remove("errorCampo"));
-
-    inputs.forEach(input => {
-        const campo = input.dataset.campo;
-        const val = input.value.trim();
-
-        if(campo.toUpperCase() === "RFC"){
-            if(!validarRFC(val)){
-                errores.push("RFC incorrecto (deben ser 12/13 caracteres alfanuméricos).");
-                input.classList.add("errorCampo");
-            }
-        }
-
-        if(campo.toUpperCase() === "NOMBRE"){
-            if(!validarNombre(val)){
-                errores.push("El nombre no puede estar vacío.");
-                input.classList.add("errorCampo");
-            }
-        }
-
-        if(campo.toUpperCase() === "CODIGOPOSTAL" || campo.toUpperCase()==="CP"){
-            if(!validarCP(val)){
-                errores.push("Código Postal inválido (5 dígitos).");
-                input.classList.add("errorCampo");
-            }
-        }
-
-        if(campo.toUpperCase() === "REGIMENFISCAL"){
-            if(!validarRegimen(val)){
-                errores.push("Régimen Fiscal inválido (3 dígitos).");
-                input.classList.add("errorCampo");
-            }
-        }
-
-        if(campo.toUpperCase() === "USOCFDI"){
-            if(!validarUsoCFDI(val)){
-                errores.push("Uso CFDI inválido.");
-                input.classList.add("errorCampo");
-            }
-        }
-    });
-
-    if(errores.length > 0){
-        alert("No se puede timbrar:\n\n" + errores.join("\n"));
-        return;
-    }
-
-    inputs.forEach(input=>{
-        const campo = input.dataset.campo;
-        const valor = input.value;
-
-        const todosElementos = xmlOriginal.getElementsByTagName("*");
-        for(let el of todosElementos){
-            if(el.hasAttribute(campo)){
-                el.setAttribute(campo, valor);
-            }
-        }
-    });
-
-    enviarParaTimbrar(xmlOriginal);
-};
-
-// --- ENVIAR PARA TIMBRAR ---
-function enviarParaTimbrar(xmlDom){
-    const tipoSeleccionado = document.getElementById("tipoTimbrado").value;
-    const xmlString = new XMLSerializer().serializeToString(xmlDom);
-    const formData = new FormData();
-    const xmlBlob = new Blob([xmlString], { type: "text/xml" });
-    
-    if (tipoSeleccionado === "anticipo") {
-        // Para anticipo: enviar ambos XMLs
-        const archivoProductos = document.getElementById("xmlProductos").files[0];
-        const archivoAplicacion = document.getElementById("xmlAplicacion").files[0];
-        
-        if (archivoProductos && archivoAplicacion) {
-            formData.append("xml_archivo1", archivoProductos, "archivo1.xml");
-            formData.append("xml_archivo2", archivoAplicacion, "archivo2.xml");
-        } else {
-            alert("Error: Faltan archivos XML para anticipo.");
-            return;
-        }
-    } else {
-        // Para complemento: enviar un XML
-        formData.append("xml", xmlBlob, "factura.xml");
-    }
-    
-    // Agregar forma de pago seleccionada
-    let formaPagoSeleccionada;
-    if (tipoSeleccionado === "anticipo") {
-        formaPagoSeleccionada = "99"; // Siempre "99" para anticipo
-    } else {
-        formaPagoSeleccionada = document.getElementById("formaPago").value || "03";
-    }
-    
-    const formaPagoTexto = tipoSeleccionado === "anticipo" ? 
-        "99: Por definir (Aplicación de Anticipo)" : 
-        document.getElementById("formaPago").options[document.getElementById("formaPago").selectedIndex]?.text || "03: Transferencia electrónica de fondos";
-    
-    formData.append("forma_pago", formaPagoSeleccionada);
-
-    // Determinar endpoint según el tipo seleccionado
-    console.log("Tipo seleccionado:", tipoSeleccionado);
-    console.log("Forma de pago seleccionada:", formaPagoSeleccionada, "-", formaPagoTexto);
-    
-    let endpoint;
-    if (tipoSeleccionado === "complemento") {
-        endpoint = "https://tm7.telmedia.com.mx:5000/timbrar-complemento-pago";
-    } else if (tipoSeleccionado === "anticipo") {
-        endpoint = "https://tm7.telmedia.com.mx:5000/timbrar-aplicacion-anticipo";
-    } else {
-        alert("Selecciona un tipo válido.");
-        return;
-    }
-
-    fetch(endpoint, {
-        method:"POST",
-        body:formData
-    })
-    .then(r=>r.json())
-    .then(data=>{
-        // Verificar si hay error
-        if(!data.success || data.error){
-            alert("Error del servidor: " + (data.error || "Error desconocido"));
-            return;
-        }
-
-        let archivosDescargados = 0;
-        let mensajes = [];
-
-        // Descargar el XML timbrado
-        if(data.xml) {
-            const xmlBytes = atob(data.xml);
-            const xmlBlob = new Blob([xmlBytes], { type: "text/xml" });
-            const xmlUrl = URL.createObjectURL(xmlBlob);
-            const xmlLink = document.createElement("a");
-            xmlLink.href = xmlUrl;
-            xmlLink.download = data.xml_filename || `CFDI_${tipoSeleccionado}_Timbrado.xml`;
-            xmlLink.click();
-            URL.revokeObjectURL(xmlUrl);
-            archivosDescargados++;
-            mensajes.push("XML descargado");
-        }
-
-        // Descargar el PDF si existe
-        if(data.pdf) {
-            const pdfBytes = atob(data.pdf);
-            const pdfBlob = new Blob([pdfBytes], { type: "application/pdf" });
-            const pdfUrl = URL.createObjectURL(pdfBlob);
-            const pdfLink = document.createElement("a");
-            pdfLink.href = pdfUrl;
-            pdfLink.download = data.pdf_filename || `CFDI_${tipoSeleccionado}_Factura.pdf`;
-            pdfLink.click();
-            URL.revokeObjectURL(pdfUrl);
-            archivosDescargados++;
-            mensajes.push("PDF descargado");
-        } else if(data.pdf_error) {
-            console.warn("Error generando PDF:", data.pdf_error);
-            mensajes.push("PDF no disponible: " + data.pdf_error);
-        }
-
-        // Mensaje de éxito
-        let mensaje = `CFDI ${tipoSeleccionado} Timbrado exitosamente.\n`;
-        
-        // Solo mostrar forma de pago si es complemento de pago
-        if (tipoSeleccionado === "complemento") {
-            mensaje += `Forma de pago aplicada: ${formaPagoTexto}\n`;
-        }
-        
-        mensaje += mensajes.join(", ");
-        
-        alert(mensaje);
-    })
-    .catch(err=>{
-        console.error("Error enviando a timbrar:", err);
-        alert("Error enviando a timbrar: " + err.message);
-    });
-}
-</script>
+    <script src="tm/assets/js/timbrado.js"></script>
 </body>
 </html>

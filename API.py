@@ -102,6 +102,7 @@ CFDI_NS = "http://www.sat.gob.mx/cfd/4"
 PAGO_NS = "http://www.sat.gob.mx/Pagos20"
 TFD_NS = "http://www.sat.gob.mx/TimbreFiscalDigital"
 
+#eliminar
 app = Flask(__name__)
 CORS(app)
 
@@ -696,7 +697,7 @@ def asegurar_namespaces_xml(xmlDom):
         log_mensaje("schemaLocation básico agregado", "OK")
 
 # TRANSFORMACIONES ESPECÍFICAS - APLICACIÓN DE ANTICIPO
-def transformar_a_aplicacion_anticipo(xmlDom, moneda="MXN", tipo_cambio="1"):
+def transformar_a_aplicacion_anticipo(xmlDom, moneda="MXN", tipo_cambio="1", conceptos_ya_reemplazados=False):
     """Transforma XML para Aplicación de Anticipo (tipo I con descuento)"""
     
     # PRIMERO: Asegurar que todos los namespaces estén definidos
@@ -880,40 +881,51 @@ def transformar_a_aplicacion_anticipo(xmlDom, moneda="MXN", tipo_cambio="1"):
             comprobante.insertBefore(conceptos, complementoExistente)
         else:
             comprobante.appendChild(conceptos)
-        print(" Conceptos creados para Aplicación de Anticipo con descuento a nivel concepto")
+        print("✓ Conceptos creados para Aplicación de Anticipo con descuento a nivel concepto")
     else:
-        # Si los conceptos ya existen y su suma es menor al anticipo, ajustar el primer concepto
+        # Si los conceptos ya existen
         conceptosArray = conceptos.getElementsByTagNameNS(CFDI_NS, "Concepto")
         if conceptosArray.length == 0:
             conceptosArray = conceptos.getElementsByTagName("cfdi:Concepto")
         
-        print(f" Encontrados {conceptosArray.length} conceptos")
+        print(f"✓ Encontrados {conceptosArray.length} conceptos")
         
-        # Si hay conceptos, mantener sus importes originales pero asegurar consistencia
-        if conceptosArray.length > 0:
-            primerConcepto = conceptosArray[0]
-            importeOriginal = float(primerConcepto.getAttribute("Importe") or "0")
+        # CORRECCIÓN: Si los conceptos ya fueron reemplazados con datos de FileMaker, NO modificar las descripciones
+        if conceptos_ya_reemplazados:
+            print("✓ Los conceptos ya fueron reemplazados con datos de FileMaker, manteniendo descripciones originales")
             
-            # NO cambiar el importe del concepto, solo ajustar otros atributos
-            primerConcepto.setAttribute("ObjetoImp", "02")  # 02 para SÍ objeto de impuestos
-            
-            # Solo cambiar descripción si es necesario para anticipo
-            descripcionActual = primerConcepto.getAttribute("Descripcion") or ""
-            if "anticipo" not in descripcionActual.lower():
-                primerConcepto.setAttribute("Descripcion", "Anticipo del bien o servicio")
-            
-            print(f"OK: Concepto ajustado: {importeOriginal:.2f} (manteniendo importe original)")
-            
-            # MANTENER impuestos del concepto existentes
-            impuestosConcepto = primerConcepto.getElementsByTagName("cfdi:Impuestos")[0] if primerConcepto.getElementsByTagName("cfdi:Impuestos") else None
-            if impuestosConcepto:
-                print("OK: Impuestos mantenidos en el concepto")
-            else:
-                print("ADVERTENCIA: No se encontraron impuestos en el concepto")
-            
-            # IMPORTANTE: Agregar el descuento a nivel de concepto
-            primerConcepto.setAttribute("Descuento", f"{montoAnticipo:.2f}")
-            print(f" Descuento de {montoAnticipo:.2f} agregado al concepto")
+            # Solo asegurar que todos los conceptos tengan ObjetoImp correcto
+            for i in range(conceptosArray.length):
+                concepto = conceptosArray[i]
+                concepto.setAttribute("ObjetoImp", "02")  # 02 para SÍ objeto de impuestos
+                
+            print(f"✓ Conceptos de FileMaker preservados ({conceptosArray.length} conceptos)")
+        else:
+            # Si hay conceptos pero NO vienen de FileMaker, aplicar la lógica anterior
+            if conceptosArray.length > 0:
+                primerConcepto = conceptosArray[0]
+                importeOriginal = float(primerConcepto.getAttribute("Importe") or "0")
+                
+                # NO cambiar el importe del concepto, solo ajustar otros atributos
+                primerConcepto.setAttribute("ObjetoImp", "02")  # 02 para SÍ objeto de impuestos
+                
+                # Solo cambiar descripción si es necesario para anticipo
+                descripcionActual = primerConcepto.getAttribute("Descripcion") or ""
+                if "anticipo" not in descripcionActual.lower():
+                    primerConcepto.setAttribute("Descripcion", "Anticipo del bien o servicio")
+                
+                print(f"✓ Concepto ajustado: {importeOriginal:.2f} (manteniendo importe original)")
+                
+                # MANTENER impuestos del concepto existentes
+                impuestosConcepto = primerConcepto.getElementsByTagName("cfdi:Impuestos")[0] if primerConcepto.getElementsByTagName("cfdi:Impuestos") else None
+                if impuestosConcepto:
+                    print("✓ Impuestos mantenidos en el concepto")
+                else:
+                    print("⚠ ADVERTENCIA: No se encontraron impuestos en el concepto")
+                
+                # IMPORTANTE: Agregar el descuento a nivel de concepto
+                primerConcepto.setAttribute("Descuento", f"{montoAnticipo:.2f}")
+                print(f"✓ Descuento de {montoAnticipo:.2f} agregado al concepto")
     
     # 8. AHORA calcular el Total final con los impuestos que quedaron
     impuestosTotal = 0
@@ -957,7 +969,7 @@ def transformar_a_aplicacion_anticipo(xmlDom, moneda="MXN", tipo_cambio="1"):
             trasladosComprobante[0].setAttribute("Importe", f"{impuestosTotal:.2f}")
             trasladosComprobante[0].setAttribute("Base", f"{subTotalCalculado:.2f}")
         
-        print(f"OK: Impuestos recalculados sumando conceptos: {impuestosTotal:.2f}")
+        print(f"✓ Impuestos recalculados sumando conceptos: {impuestosTotal:.2f}")
     else:
         # Si no hay impuestos, crear el nodo de impuestos para aplicación de anticipo
         impuestosNode = xmlDom.createElementNS(CFDI_NS, "cfdi:Impuestos")
@@ -985,18 +997,18 @@ def transformar_a_aplicacion_anticipo(xmlDom, moneda="MXN", tipo_cambio="1"):
         else:
             comprobante.appendChild(impuestosNode)
         
-        print(f" Impuestos creados para aplicación de anticipo: {impuestosTotal}")
+        print(f"✓ Impuestos creados para aplicación de anticipo: {impuestosTotal}")
     
     # 9. Calcular Total final (SubTotal - Descuento + Impuestos)
     # Para aplicación de anticipo, el Total debe ser igual al monto del anticipo recibido
     totalCalculado = subTotalCalculado - montoAnticipo + impuestosTotal
     comprobante.setAttribute("Total", f"{totalCalculado:.2f}")
     
-    print(f" Total final calculado: {subTotalCalculado:.2f} - {montoAnticipo:.2f} + {impuestosTotal:.2f} = {totalCalculado:.2f}")
+    print(f"✓ Total final calculado: {subTotalCalculado:.2f} - {montoAnticipo:.2f} + {impuestosTotal:.2f} = {totalCalculado:.2f}")
     
     # Verificar que el Total coincida con el anticipo recibido
     if abs(totalCalculado - montoAnticipoRecibido) > 0.01:
-        print(f" ADVERTENCIA: Total calculado ({totalCalculado:.2f}) no coincide con anticipo recibido ({montoAnticipoRecibido:.2f})")
+        print(f"⚠ ADVERTENCIA: Total calculado ({totalCalculado:.2f}) no coincide con anticipo recibido ({montoAnticipoRecibido:.2f})")
     
     # 10. Solo remover impuestos si el Total es 0 Y no hay impuestos trasladados
     if totalCalculado == 0 and impuestosTotal == 0:
@@ -1005,7 +1017,7 @@ def transformar_a_aplicacion_anticipo(xmlDom, moneda="MXN", tipo_cambio="1"):
             nodoImpuestos = impuestosComprobanteNode[0]
             remover_nodo_seguro(comprobante, nodoImpuestos, "Nodo Impuestos del Comprobante (Total = 0 sin impuestos)")
     
-    print("TRANSFORMACIÓN A APLICACIÓN DE ANTICIPO COMPLETADA")
+    print("✓ TRANSFORMACIÓN A APLICACIÓN DE ANTICIPO COMPLETADA")
 
 # TRANSFORMACIONES ESPECÍFICAS - COMPLEMENTO DE PAGO
 def transformar_a_complemento_pago(xmlDom, uuid_documento_original=None, forma_pago="99"):
@@ -1172,8 +1184,11 @@ def procesar_aplicacion_anticipo(xml_original, forma_pago="99", metodo_pago="PPD
     agregar_forma_pago_xml(tree, forma_pago, "I", metodo_pago, moneda_filemaker, tipo_cambio_filemaker)
     
     # NUEVO: Si hay conceptos de FileMaker, reemplazar los conceptos del XML
+    conceptos_ya_reemplazados = False
     if conceptos_filemaker:
         reemplazar_conceptos_con_filemaker(tree, conceptos_filemaker)
+        conceptos_ya_reemplazados = True  # Marcar que los conceptos ya fueron reemplazados
+        print("✓ Conceptos reemplazados con datos de FileMaker")
     
     # NUEVO: Si hay XML de FileMaker, actualizar datos del receptor
     if xml_filemaker_bytes:
@@ -1198,7 +1213,7 @@ def procesar_aplicacion_anticipo(xml_original, forma_pago="99", metodo_pago="PPD
             'xmlns:cfdi="http://www.sat.gob.mx/cfd/4"',
             'xmlns:cfdi="http://www.sat.gob.mx/cfd/4" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"'
         )
-        print("OK: Namespace xsi agregado al XML antes del parsing")
+        print("✓ Namespace xsi agregado al XML antes del parsing")
     
     # Verificar schemaLocation
     if 'xsi:schemaLocation=' not in xml_string_str:
@@ -1206,16 +1221,17 @@ def procesar_aplicacion_anticipo(xml_original, forma_pago="99", metodo_pago="PPD
             'xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"',
             'xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://www.sat.gob.mx/cfd/4 http://www.sat.gob.mx/sitio_internet/cfd/4/cfdv40.xsd"'
         )
-        print("OK: schemaLocation agregado al XML antes del parsing")
+        print("✓ schemaLocation agregado al XML antes del parsing")
     
     xml_string = xml_string_str.encode('utf-8')
     dom = parseString(xml_string)
     
     # Aplicar transformación a Aplicación de Anticipo
+    # IMPORTANTE: Pasar el parámetro conceptos_ya_reemplazados
     try:
-        transformar_a_aplicacion_anticipo(dom, moneda_filemaker, tipo_cambio_filemaker)
+        transformar_a_aplicacion_anticipo(dom, moneda_filemaker, tipo_cambio_filemaker, conceptos_ya_reemplazados)
     except Exception as e:
-        print(f" Error en transformación: {str(e)}")
+        print(f"⚠ Error en transformación: {str(e)}")
         raise
     
     # Convertir de vuelta a bytes
@@ -1241,10 +1257,10 @@ def procesar_aplicacion_anticipo(xml_original, forma_pago="99", metodo_pago="PPD
 
     # Si el timbrado no devuelve XML válido, retornar el XML sellado
     if xml_timbrado is None or not xml_timbrado.strip().startswith(b"<"):
-        print("ADVERTENCIA: DEVOLVIENDO XML SELLADO (NO TIMBRADO) - El timbrado fallo")
+        print("⚠ ADVERTENCIA: DEVOLVIENDO XML SELLADO (NO TIMBRADO) - El timbrado fallo")
         return xml_sellado
     
-    print("OK: DEVOLVIENDO XML TIMBRADO - El timbrado fue exitoso")
+    print("✓ OK: DEVOLVIENDO XML TIMBRADO - El timbrado fue exitoso")
 
     log_timbrado_exitoso("XML timbrado correctamente")
     return xml_timbrado
@@ -1606,7 +1622,7 @@ def detectar_datos_faltantes(xml_bytes):
         # Campos críticos que no pueden estar vacíos
         campos_criticos = [
             "RFC", "NOMBRE", "CODIGOPOSTAL", "DOMICILIOFISCALRECEPTOR",
-            "REGIMENFISCAL", "REGIMENFISCALRECEPTOR", "USOCFDI"
+            "REGIMENFISCAL", "REGIMENFISCALRECEPTOR", "USOCFDI", "UUID"
         ]
         
         # Buscar todos los elementos y atributos

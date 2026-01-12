@@ -1,5 +1,5 @@
-<!--#include file="/tm/pages/header.htm"-->
+<!--#include file="tm/pages/header.html" -->
 <br>
 <!--#include file="Timbrado.html"-->
 <br>
-<!--#include file="/tm/pages/footer.htm"-->
+<!--#include file="tm/pages/footer.html"-->
