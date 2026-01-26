@@ -523,30 +523,20 @@ def actualizar_receptor_con_filemaker(tree, xml_filemaker_bytes):
         traceback.print_exc()
 
 def reemplazar_conceptos_con_filemaker(tree, conceptos_filemaker):
-    """
-    Reemplaza los conceptos del XML con TODOS los conceptos del FileMaker
-    """
     try:
         # Buscar nodo Conceptos
         conceptos_node = tree.find(f".//{{{CFDI_NS}}}Conceptos")
         if conceptos_node is None:
-            print("⚠ No se encontró nodo Conceptos, creando uno nuevo")
             comprobante = tree
             conceptos_node = etree.SubElement(comprobante, f"{{{CFDI_NS}}}Conceptos")
         
         # Limpiar todos los conceptos existentes
         conceptos_node.clear()
-        
-        # Inicializar acumuladores
+
         subtotal_total = Decimal('0')
         iva_total = Decimal('0')
         
         total_conceptos = len(conceptos_filemaker)
-        print(f"\n{'='*70}")
-        print(f"REEMPLAZANDO CONCEPTOS EN XML")
-        print(f"Total de conceptos a agregar: {total_conceptos}")
-        print(f"{'='*70}\n")
-        
         # Iterar sobre TODOS los conceptos de FileMaker
         for idx, concepto_fm in enumerate(conceptos_filemaker, 1):
             print(f"➤ Agregando concepto {idx}/{total_conceptos}")
@@ -561,10 +551,6 @@ def reemplazar_conceptos_con_filemaker(tree, conceptos_filemaker):
             concepto_elem.set("Unidad", concepto_fm.unidad)
             concepto_elem.set("Descripcion", concepto_fm.descripcion)
             
-            # ⭐ IMPORTANTE: Usar los nombres correctos de atributos
-            # El objeto ConceptoCFDI tiene estos atributos:
-            # - valor_unitario (con guión bajo y minúsculas)
-            # - importe (con minúsculas)
             concepto_elem.set("ValorUnitario", f"{concepto_fm.valor_unitario:.2f}")
             concepto_elem.set("Importe", f"{concepto_fm.importe:.2f}")
             concepto_elem.set("ObjetoImp", "02")
@@ -592,20 +578,6 @@ def reemplazar_conceptos_con_filemaker(tree, conceptos_filemaker):
             subtotal_total += concepto_fm.importe
             iva_total += iva_importe
             
-            # Log de progreso
-            desc_corta = concepto_fm.descripcion[:50] + "..." if len(concepto_fm.descripcion) > 50 else concepto_fm.descripcion
-            print(f"  ✓ {desc_corta}")
-            print(f"    Cantidad: {concepto_fm.cantidad}, Importe: ${concepto_fm.importe:.2f}")
-        
-        print(f"\n{'='*70}")
-        print(f"CONCEPTOS AGREGADOS AL XML")
-        print(f"{'='*70}")
-        print(f"Total conceptos: {total_conceptos}")
-        print(f"SubTotal: ${subtotal_total:.2f}")
-        print(f"IVA (16%): ${iva_total:.2f}")
-        print(f"Total: ${subtotal_total + iva_total:.2f}")
-        print(f"{'='*70}\n")
-        
         # Actualizar totales en el comprobante
         tree.set("SubTotal", f"{subtotal_total:.2f}")
         total_final = subtotal_total + iva_total
@@ -614,7 +586,6 @@ def reemplazar_conceptos_con_filemaker(tree, conceptos_filemaker):
         # Actualizar o crear nodo de impuestos del comprobante
         impuestos_comprobante = tree.find(f".//{{{CFDI_NS}}}Impuestos")
         if impuestos_comprobante is None:
-            print("⚠ Creando nodo de Impuestos en el comprobante")
             # Crear nodo de impuestos si no existe
             impuestos_comprobante = etree.Element(f"{{{CFDI_NS}}}Impuestos")
             # Insertarlo antes del complemento o al final
@@ -642,10 +613,8 @@ def reemplazar_conceptos_con_filemaker(tree, conceptos_filemaker):
         traslado_comp.set("TasaOCuota", "0.160000")
         traslado_comp.set("Importe", f"{iva_total:.2f}")
         
-        print("✓ Totales del comprobante actualizados correctamente\n")
-        
     except Exception as e:
-        print(f"❌ ERROR reemplazando conceptos: {e}")
+        print(f" ERROR reemplazando conceptos: {e}")
         import traceback
         traceback.print_exc()
 
