@@ -1,4 +1,6 @@
 let xmlOriginal = null;
+const inputXMLAplicacion = document.querySelector('#xmlAplicacion');
+// const inputFolio = document.querySelector('#numFolio').value;
 
 // VALIDACIONES 
 function validarRFC(rfc) {
@@ -22,7 +24,7 @@ function validarUsoCFDI(uso){
     return uso.trim() !== "";
 }
 
-function validarCFDIParaTimbrar(archivoXML) {
+function validarCFDI(archivoXML) {
     return new Promise((resolve, reject) => {
         const reader = new FileReader();
         
@@ -57,7 +59,7 @@ function validarCFDIParaTimbrar(archivoXML) {
                     if (!uuid || uuid.trim() === '') {
                         errores.push('El UUID está vacío. Debe contener un identificador válido antes de timbrar.');
                     } else if (!regexUUID.test(uuid)) {
-                        errores.push(`El UUID "${uuid}" no tiene el formato correcto (ej: 12345678-1234-1234-1234-123456789012)`);
+                        errores.push('El UUID no tiene el formato correcto');
                     }
                 } else {
                     advertencias.push('No se encontró el nodo TimbreFiscalDigital. Se agregará al timbrar.');
@@ -75,34 +77,32 @@ function validarCFDIParaTimbrar(archivoXML) {
                         const regexClave = /^\d{8}$/;
                         
                         if (!claveProdServ) {
-                            errores.push(`Concepto ${index + 1}: Falta el atributo ClaveProdServ`);
+                            errores.push('Falta el atributo ClaveProdServ');
                         } else if (!regexClave.test(claveProdServ)) {
-                            errores.push(`Concepto ${index + 1}: ClaveProdServ "${claveProdServ}" debe contener exactamente 8 dígitos numéricos`);
+                            errores.push('ClaveProdServ con formato incorrecto');
                         }
                         
                         // 2.2 Validar ClaveUnidad (debe ser "ACT")
                         const claveUnidad = concepto.getAttribute('ClaveUnidad');
                         
                         if (!claveUnidad) {
-                            errores.push(`Concepto ${index + 1}: Falta el atributo ClaveUnidad`);
+                            errores.push('Falta el atributo ClaveUnidad');
                         } else if (claveUnidad !== 'ACT') {
-                            errores.push(`Concepto ${index + 1}: ClaveUnidad debe ser "ACT", se encontró "${claveUnidad}"`);
+                            errores.push('ClaveUnidad con formato incorrecto');
                         }
                         
                         // 2.3 Validar Descripción (debe contener la palabra "Anticipo")
                         const descripcion = concepto.getAttribute('Descripcion');
                         
                         if (!descripcion) {
-                            errores.push(`Concepto ${index + 1}: Falta el atributo Descripcion`);
+                            errores.push('Falta el atributo Descripcion');
                         } else if (!descripcion.toLowerCase().includes('anticipo')) {
-                            errores.push(`Concepto ${index + 1}: La Descripción debe contener la palabra "Anticipo". Se encontró: "${descripcion}"`);
+                            errores.push('Descripción con formato incorrecto');
                         }
                     });
                 }
-                
-                // 3. Validaciones adicionales recomendadas
-                
-                // 3.1 RFC Emisor
+
+                // RFC Emisor
                 const emisor = xmlDoc.querySelector('Emisor, cfdi\\:Emisor');
                 if (emisor) {
                     const rfcEmisor = emisor.getAttribute('Rfc');
@@ -112,7 +112,7 @@ function validarCFDIParaTimbrar(archivoXML) {
                     }
                 }
                 
-                // 3.2 RFC Receptor
+                // RFC Receptor
                 const receptor = xmlDoc.querySelector('Receptor, cfdi\\:Receptor');
                 if (receptor) {
                     const rfcReceptor = receptor.getAttribute('Rfc');
@@ -121,7 +121,6 @@ function validarCFDIParaTimbrar(archivoXML) {
                         errores.push(`RFC del Receptor inválido: "${rfcReceptor}"`);
                     }
                 }
-                
                 
                 // Resultado final
                 if (errores.length === 0) {
@@ -204,10 +203,12 @@ document.getElementById("btnContinuarTimbrado").onclick = () => {
         // Para anticipo: mostrar sección de dos XMLs
         xmlUnicoSection.classList.add("hidden");
         xmlAnticipoSection.classList.remove("hidden");
+        document.querySelector('#btnContinuarTimbrado').classList.add('hidden')
     } else {
         // Para complemento: mostrar sección de un XML
         xmlUnicoSection.classList.remove("hidden");
         xmlAnticipoSection.classList.add("hidden");
+        document.querySelector('#btnContinuarTimbrado').classList.add('hidden')
     }
 };
 
@@ -217,6 +218,7 @@ document.getElementById("xmlFile").onchange = function() {
     const fileNameDiv = document.getElementById("fileName");
     if(archivo) {
         fileNameDiv.textContent = archivo.name;
+        validarEntradasXML(archivo);
     } else {
         fileNameDiv.textContent = "";
     }
@@ -226,15 +228,18 @@ document.getElementById("xmlFile").onchange = function() {
 document.getElementById("xmlProductos").onchange = function() {
     const archivo = this.files[0];
     const fileNameDiv = document.getElementById("fileNameProductos");
-     const btnValidarCFDI = document.getElementById('validarCFDI');
      
     if(archivo) {
         fileNameDiv.textContent = archivo.name;
-       
-        btnValidarCFDI.onclick = function () {
-            validarCFDIParaTimbrar(archivo);
-        }
-        
+         validarCFDI(archivo)
+        .then(res => {
+            alert("CFDI válido\n\n" + res.mensaje);
+            inputXMLAplicacion.disabled = false;
+        })
+        .catch(err => {
+            alert("CFDI inválido\n\n" + err.errores.join("\n"));
+            fileNameDiv.textContent = "";
+        })
     } else {
         fileNameDiv.textContent = "";
     }
@@ -258,14 +263,12 @@ document.getElementById("procesarXML").onclick = () => {
     if (tipoSeleccionado === "anticipo") {
         // Para anticipo: validar que se hayan subido ambos XMLs
         const archivoProductos = document.getElementById("xmlProductos").files[0];
-        //AQUI DEBO VALIDAR QUE EL PRIMERO XML SEA EL REQUERIDO Y LO MISMO PARA EL SEGUNDO
         const archivoAplicacion = document.getElementById("xmlAplicacion").files[0];
         
         if(!archivoProductos){ 
             alert("Sube el Primer XML."); 
             return; 
         }
-        
         if(!archivoAplicacion){ 
             alert("Sube el Segundo XML."); 
             return; 
@@ -273,7 +276,6 @@ document.getElementById("procesarXML").onclick = () => {
         
         // Procesar ambos XMLs para anticipo
         procesarXMLsAnticipo(archivoProductos, archivoAplicacion);
-        
     } else {
         // Para complemento: validar un solo XML
         const archivo = document.getElementById("xmlFile").files[0];
@@ -281,7 +283,7 @@ document.getElementById("procesarXML").onclick = () => {
             alert("Sube un XML."); 
             return; 
         }
-        
+        // validarFolio(inputFolio);
         // Procesar XML único
         procesarXMLUnico(archivo);
     }
@@ -376,74 +378,6 @@ function procesarDatosFaltantes(xml) {
     document.getElementById("faltantesCampos").innerHTML = html;
     document.getElementById("faltantesSection").classList.remove("hidden");
 }
-
-// GUARDAR DATOS 
-document.getElementById("btnGuardarDatos").onclick = () => {
-
-    const inputs = document.querySelectorAll("#faltantesCampos input");
-    let errores = [];
-
-    inputs.forEach(input => input.classList.remove("errorCampo"));
-
-    inputs.forEach(input => {
-        const campo = input.dataset.campo;
-        const val = input.value.trim();
-
-        if(campo.toUpperCase() === "RFC"){
-            if(!validarRFC(val)){
-                errores.push("RFC incorrecto (deben ser 12/13 caracteres alfanuméricos).");
-                input.classList.add("errorCampo");
-            }
-        }
-
-        if(campo.toUpperCase() === "NOMBRE"){
-            if(!validarNombre(val)){
-                errores.push("El nombre no puede estar vacío.");
-                input.classList.add("errorCampo");
-            }
-        }
-
-        if(campo.toUpperCase() === "CODIGOPOSTAL" || campo.toUpperCase()==="CP"){
-            if(!validarCP(val)){
-                errores.push("Código Postal inválido (5 dígitos).");
-                input.classList.add("errorCampo");
-            }
-        }
-
-        if(campo.toUpperCase() === "REGIMENFISCAL"){
-            if(!validarRegimen(val)){
-                errores.push("Régimen Fiscal inválido (3 dígitos).");
-                input.classList.add("errorCampo");
-            }
-        }
-
-        if(campo.toUpperCase() === "USOCFDI"){
-            if(!validarUsoCFDI(val)){
-                errores.push("Uso CFDI inválido.");
-                input.classList.add("errorCampo");
-            }
-        }
-    });
-
-    if(errores.length > 0){
-        alert("No se puede timbrar:\n\n" + errores.join("\n"));
-        return;
-    }
-
-    inputs.forEach(input=>{
-        const campo = input.dataset.campo;
-        const valor = input.value;
-
-        const todosElementos = xmlOriginal.getElementsByTagName("*");
-        for(let el of todosElementos){
-            if(el.hasAttribute(campo)){
-                el.setAttribute(campo, valor);
-            }
-        }
-    });
-
-    enviarParaTimbrar(xmlOriginal);
-};
 
 // --- ENVIAR PARA TIMBRAR ---
 function enviarParaTimbrar(xmlDom){
@@ -561,3 +495,71 @@ function enviarParaTimbrar(xmlDom){
         alert("Error enviando a timbrar: " + err.message);
     });
 }
+
+function validarFolio(folio) {
+    folio.trim();
+    if ( folio === '') {
+        alert('El folio no puede tener espacios en blanco');
+        if (folio.length < 4 || folio.length > 4 ) {
+            alert('El folio debe ser de 4 digitos')
+        } 
+        return
+    }
+}
+
+function validarEntradasXML(xmlDom) {
+    //el archivo es un htmlDom
+    const reader = new FileReader();
+
+    reader.onload = function (e) {
+        // convertir string XML
+        const xmlString = e.target.result;
+        //Crear Dom xml
+        const parser = new DOMParser();
+        const xmlDoc = parser.parseFromString(xmlString, "text/xml");
+
+        //leer etiquetas
+        const comprobante = xmlDoc.getElementsByTagName("cfdi:Comprobante")[0];
+        const traslados = xmlDoc.getElementsByTagName("cfdi:Traslado")[0];
+
+        const folio = comprobante.getAttribute("Folio") || "";
+
+        const base = traslados.getAttribute("Base") || "";
+        const importe = traslados.getAttribute("Importe") || "";
+
+        const section = document.querySelector('#xmlUnicoSection');
+
+        const entradaFolio = document.createElement('input');
+        entradaFolio.classList.add('entradas');
+        entradaFolio.type = 'text';
+        entradaFolio.value = folio;
+        section.appendChild(entradaFolio);
+
+        const entradaBase = document.createElement('input');
+        entradaBase.classList.add('entradas');
+        entradaBase.type = 'text';
+        entradaBase.value =base;
+        // entradaBase.placeholder = 'Base';
+        section.appendChild(entradaBase);
+
+        entradaBase.addEventListener('input', () => {
+            traslados.setAttribute("Base", entradaBase.value);
+        });
+
+        const entradaImporte = document.createElement('input');
+        entradaImporte.classList.add('entradas');
+        entradaImporte.type = 'text';
+        entradaImporte.value = importe;
+        // entradaImporte.placeholder = 'Importe';
+        section.appendChild(entradaImporte);
+
+        entradaImporte.addEventListener('input', () => {
+            traslados.setAttribute("Importe", entradaImporte.value);
+        });
+
+        console.log(base)
+        console.log(importe)
+    }
+    reader.readAsText(xmlDom)
+}
+

@@ -13,7 +13,7 @@
 
         <label>Selecciona tipo:</label>
         <select id="tipoTimbrado" class="placeholder" required>
-            <option value="" disabled selected >Selecciona tipo...</option>
+            <option value="" disabled >-- Selecciona tipo --</option>
             <option value="anticipo">Aplicación de Anticipo</option>
             <option value="complemento">Complemento de Pago</option>
         </select>
@@ -40,6 +40,7 @@
                     <label for="xmlFile" class="file-input-custom">Seleccionar archivo</label>
                 </div>
                 <div id="fileName" class="file-name"></div>
+                <!-- <input id="numFolio" class="numFolio" type="text" inputmode="numeric" pattern="[0-9]*" maxlength="4" placeholder="Eje: 2093"> -->
             </div>
 
             <div id="xmlAnticipoSection" class="hidden">
@@ -47,24 +48,22 @@
                 <div class="file-input-wrapper">
                     <input type="file" id="xmlProductos" accept=".xml" class="file-input-hidden">
                     <label for="xmlProductos" class="file-input-custom">Seleccionar Primer XML</label>
-                </div>
-                <div id="fileNameProductos" class="file-name"></div>
-                 <div>
-                    <button id="validarCFDI">Validar CFDI</button>
+                    <div id="fileNameProductos" class="file-name"></div>
                 </div>
 
-                <label><b>Subir Segundo XML:</b></label>
-                <div class="file-input-wrapper">
-                    <input type="file" id="xmlAplicacion" accept=".xml" class="file-input-hidden">
-                    <label for="xmlAplicacion" class="file-input-custom">Seleccionar Segundo XML</label>
+                <div id="segundoXML">
+                     <label><b>Subir Segundo XML:</b></label>
+                    <div class="file-input-wrapper">
+                        <input type="file" id="xmlAplicacion" accept=".xml" class="file-input-hidden" disabled>
+                        <label for="xmlAplicacion" class="file-input-custom">Seleccionar Segundo XML</label>
+                    </div>
                 </div>
+               
                 <div id="fileNameAplicacion" class="file-name"></div>
             </div>
 
             <button id="procesarXML">SELLAR Y TIMBRAR</button>
         </div>
-
-        <div id="mensajesValidacion"></div>
     </div>
 
     <script src="tm/assets/js/timbrado.js"></script>

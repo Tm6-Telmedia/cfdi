@@ -53,7 +53,7 @@ input[type=file] {
     padding: 5px 10px;
     cursor: pointer;
     display: block;
-    margin-left: auto;
+    margin-left: 0;
     margin-right: auto;
     background: #f9f9f9;
     border: 1px solid #999;
@@ -94,7 +94,7 @@ h3 {
 
 /* segundo style */
 select.placeholder:invalid {
-    color: transparent;
+    color: #999;
     /* Se ve vacío */
 }
 
@@ -102,13 +102,13 @@ select.placeholder option {
     color: black;
 }
 
-/*tercer style*/
-
-select.placeholder:invalid {
-    color: transparent;
-    /* Se ve vacío */
+.validarCFDI {
+    margin-left: 0px;
 }
 
-select.placeholder option {
-    color: black;
+input[type=text].entradas {
+    width: 155px;
+    padding: 5px;
+    margin-top: 3px;
+    text-align: center;
 }

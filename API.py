@@ -540,8 +540,8 @@ def reemplazar_conceptos_con_filemaker(tree, conceptos_filemaker):
             concepto_elem.set("ClaveUnidad", concepto_fm.unidad)
             concepto_elem.set("Unidad", concepto_fm.unidad)
             concepto_elem.set("Descripcion", concepto_fm.descripcion)
-            concepto_elem.set("ValorUnitario", f"{concepto_fm.valor_unitario:.2f}")
-            concepto_elem.set("Importe", f"{concepto_fm.importe:.2f}")
+            concepto_elem.set("ValorUnitario", f"{concepto_fm.ValorUnitario:.2f}")
+            concepto_elem.set("Importe", f"{concepto_fm.Importe:.2f}")
             concepto_elem.set("ObjetoImp", "02")
             
             if concepto_fm.descuento > 0:
@@ -1019,8 +1019,47 @@ def transformar_a_aplicacion_anticipo(xmlDom, moneda="MXN", tipo_cambio="1", con
     
     print("✓ TRANSFORMACIÓN A APLICACIÓN DE ANTICIPO COMPLETADA")
 
+def extraer_valores_documento_original(xml_bytes):
+    """
+    Extrae Total, IVA y otros valores del documento original para el complemento de pago
+    Retorna: dict con valores necesarios para el complemento
+    """
+    try:
+        tree = etree.fromstring(xml_bytes)
+        
+        # Extraer Total del documento
+        total = tree.get("Total", "0.00")
+        
+        # Verificar si tiene impuestos trasladados
+        tiene_impuestos = False
+        impuestos_node = tree.find(f".//{{{CFDI_NS}}}Impuestos")
+        if impuestos_node is not None:
+            total_impuestos = impuestos_node.get("TotalImpuestosTrasladados")
+            if total_impuestos and float(total_impuestos) > 0:
+                tiene_impuestos = True
+        
+        log_debug(f"Valores extraídos del documento original: Total={total}, Tiene impuestos={tiene_impuestos}")
+        
+        return {
+            'monto_total': total,
+            'saldo_anterior': total,  # En un pago total, el saldo anterior es igual al total
+            'importe_pagado': total,  # Se está pagando el total
+            'saldo_insoluto': '0.00',  # Después del pago, el saldo es 0
+            'tiene_impuestos': tiene_impuestos
+        }
+        
+    except Exception as e:
+        log_error("Error extrayendo valores del documento original", e)
+        return {
+            'monto_total': '1000.00',
+            'saldo_anterior': '1000.00',
+            'importe_pagado': '1000.00',
+            'saldo_insoluto': '0.00',
+            'tiene_impuestos': False
+        }
+
 # TRANSFORMACIONES ESPECÍFICAS - COMPLEMENTO DE PAGO
-def transformar_a_complemento_pago(xmlDom, uuid_documento_original=None, forma_pago="99"):
+def transformar_a_complemento_pago(xmlDom, uuid_documento_original=None, forma_pago="99", valores_pago=None):
     """Transforma XML a Complemento de Pago (tipo P)"""
     
     # Buscar el nodo Comprobante (con o sin namespace)
@@ -1035,31 +1074,28 @@ def transformar_a_complemento_pago(xmlDom, uuid_documento_original=None, forma_p
     # IMPORTANTE: Extraer la moneda original ANTES de hacer cambios
     moneda_original = comprobante.getAttribute("Moneda") or "MXN"
     log_debug(f"Moneda original extraída para complemento: {moneda_original}")
-
-    # Transformando a Complemento de Pago
     
-    # 1. Cambiar tipo a "P" (si no lo es ya)
+    # NUEVO: Extraer Serie y Folio del documento original
+    serie_original = comprobante.getAttribute("Serie") or "A"
+    folio_original = comprobante.getAttribute("Folio") or "1"
+    log_debug(f"Serie y Folio originales: {serie_original}-{folio_original}")
+
     comprobante.setAttribute("TipoDeComprobante", "P")
     
-    # 2. Establecer SubTotal y Total en 0
     comprobante.setAttribute("SubTotal", "0")
     comprobante.setAttribute("Total", "0")
     
-    # 2.1 IMPORTANTE: Establecer Moneda en "XXX" para Complementos de Pago (obligatorio por SAT)
     comprobante.setAttribute("Moneda", "XXX")
     log_debug("Moneda establecida en complemento: XXX (obligatorio para tipo P)")
         
-    # 2.2. Establecer Exportacion (obligatorio en CFDI 4.0)
     if not comprobante.getAttribute("Exportacion"):
         comprobante.setAttribute("Exportacion", "01")
     
-    # 2.3.  IMPORTANTE: Remover TODOS los atributos que no se usan en tipo P (solo si existen)
     atributos_a_remover = ["FormaPago", "MetodoPago", "CondicionesDePago", "TipoCambio", "Descuento"]
     for atributo in atributos_a_remover:
         if comprobante.hasAttribute(atributo):
             comprobante.removeAttribute(atributo)
     
-    # 2.4.  IMPORTANTE: Establecer UsoCFDI="CP01" en el Receptor
     receptor = buscar_nodo_seguro(xmlDom, "Receptor", CFDI_NS)
     if not receptor:
         receptor = buscar_nodo_seguro(xmlDom, "cfdi:Receptor")
@@ -1116,7 +1152,17 @@ def transformar_a_complemento_pago(xmlDom, uuid_documento_original=None, forma_p
     else:
         comprobante.appendChild(conceptos)
     
-    # 6. Usar el UUID del documento original si se proporcionó
+    # 6. NUEVO: Usar valores extraídos del documento original
+    if valores_pago is None:
+        # Valores por defecto si no se proporcionan
+        valores_pago = {
+            'monto_total': '1000.00',
+            'saldo_anterior': '1000.00',
+            'importe_pagado': '1000.00',
+            'saldo_insoluto': '0.00',
+            'tiene_impuestos': False
+        }
+    
     uuid_documento = uuid_documento_original if uuid_documento_original else "00000000-0000-0000-0000-000000000000"
     
     # Crear o limpiar complemento
@@ -1138,12 +1184,24 @@ def transformar_a_complemento_pago(xmlDom, uuid_documento_original=None, forma_p
     pagos = xmlDom.createElementNS(PAGO_NS, "pago20:Pagos")
     pagos.setAttribute("Version", "2.0")
     
-    # Crear nodo Totales
+    # Crear nodo Totales con el monto correcto
     totales = xmlDom.createElementNS(PAGO_NS, "pago20:Totales")
-    totales.setAttribute("MontoTotalPagos", "1000.00")
+    totales.setAttribute("MontoTotalPagos", valores_pago['monto_total'])
+    
+    # NUEVO: Agregar totales de impuestos si el documento original tiene impuestos
+    if valores_pago['tiene_impuestos']:
+        # Calcular base IVA 16% (monto / 1.16)
+        monto_float = float(valores_pago['monto_total'])
+        base_iva_16 = monto_float / 1.16
+        total_iva_16 = monto_float - base_iva_16
+        
+        totales.setAttribute("TotalTrasladosBaseIVA16", f"{base_iva_16:.2f}")
+        totales.setAttribute("TotalTrasladosImpuestoIVA16", f"{total_iva_16:.2f}")
+        log_debug(f"Impuestos agregados - Base: {base_iva_16:.2f}, IVA: {total_iva_16:.2f}")
+    
     pagos.appendChild(totales)
     
-    # Crear nodo Pago
+    # Crear nodo Pago con los valores correctos
     pago = xmlDom.createElementNS(PAGO_NS, "pago20:Pago")
     fechaActual = datetime.now().strftime("%Y-%m-%dT%H:%M:%S")
     pago.setAttribute("FechaPago", fechaActual)
@@ -1152,25 +1210,73 @@ def transformar_a_complemento_pago(xmlDom, uuid_documento_original=None, forma_p
     pago.setAttribute("MonedaP", moneda_original)
     # Siempre establecer TipoCambioP como "1" (obligatorio para el SAT)
     pago.setAttribute("TipoCambioP", "1")
-    pago.setAttribute("Monto", "1000.00")
+    pago.setAttribute("Monto", valores_pago['monto_total'])
     
-    # Crear nodo DoctoRelacionado (obligatorio) usando el UUID extraído
+    # NUEVO: Agregar impuestos al pago si corresponde
+    if valores_pago['tiene_impuestos']:
+        impuestos_pago = xmlDom.createElementNS(PAGO_NS, "pago20:ImpuestosP")
+        traslados_p = xmlDom.createElementNS(PAGO_NS, "pago20:TrasladosP")
+        traslado_p = xmlDom.createElementNS(PAGO_NS, "pago20:TrasladoP")
+        
+        monto_float = float(valores_pago['monto_total'])
+        base_iva_16 = monto_float / 1.16
+        total_iva_16 = monto_float - base_iva_16
+        
+        traslado_p.setAttribute("BaseP", f"{base_iva_16:.2f}")
+        traslado_p.setAttribute("ImpuestoP", "002")
+        traslado_p.setAttribute("TipoFactorP", "Tasa")
+        traslado_p.setAttribute("TasaOCuotaP", "0.160000")
+        traslado_p.setAttribute("ImporteP", f"{total_iva_16:.2f}")
+        
+        traslados_p.appendChild(traslado_p)
+        impuestos_pago.appendChild(traslados_p)
+        pago.appendChild(impuestos_pago)
+        log_debug("ImpuestosP agregados al nodo Pago")
+    
+    # Crear nodo DoctoRelacionado con valores correctos y serie/folio originales
     doctoRelacionado = xmlDom.createElementNS(PAGO_NS, "pago20:DoctoRelacionado")
     doctoRelacionado.setAttribute("IdDocumento", uuid_documento)
-    doctoRelacionado.setAttribute("Serie", "A")
-    doctoRelacionado.setAttribute("Folio", "1")
+    doctoRelacionado.setAttribute("Serie", serie_original)
+    doctoRelacionado.setAttribute("Folio", folio_original)
     doctoRelacionado.setAttribute("MonedaDR", moneda_original)
     doctoRelacionado.setAttribute("EquivalenciaDR", "1")
     doctoRelacionado.setAttribute("NumParcialidad", "1")
-    doctoRelacionado.setAttribute("ImpSaldoAnt", "1000.00")
-    doctoRelacionado.setAttribute("ImpPagado", "1000.00")
-    doctoRelacionado.setAttribute("ImpSaldoInsoluto", "0.00")
-    doctoRelacionado.setAttribute("ObjetoImpDR", "01")
+    doctoRelacionado.setAttribute("ImpSaldoAnt", valores_pago['saldo_anterior'])
+    doctoRelacionado.setAttribute("ImpPagado", valores_pago['importe_pagado'])
+    doctoRelacionado.setAttribute("ImpSaldoInsoluto", valores_pago['saldo_insoluto'])
+    
+    # CORREGIR: ObjetoImpDR debe ser "02" si tiene impuestos, "01" si no
+    objeto_imp_dr = "02" if valores_pago['tiene_impuestos'] else "01"
+    doctoRelacionado.setAttribute("ObjetoImpDR", objeto_imp_dr)
+    log_debug(f"ObjetoImpDR establecido en: {objeto_imp_dr}")
+    
+    # NUEVO: Agregar impuestos al documento relacionado si corresponde
+    if valores_pago['tiene_impuestos']:
+        impuestos_dr = xmlDom.createElementNS(PAGO_NS, "pago20:ImpuestosDR")
+        traslados_dr = xmlDom.createElementNS(PAGO_NS, "pago20:TrasladosDR")
+        traslado_dr = xmlDom.createElementNS(PAGO_NS, "pago20:TrasladoDR")
+        
+        monto_float = float(valores_pago['monto_total'])
+        base_iva_16 = monto_float / 1.16
+        total_iva_16 = monto_float - base_iva_16
+        
+        traslado_dr.setAttribute("BaseDR", f"{base_iva_16:.2f}")
+        traslado_dr.setAttribute("ImpuestoDR", "002")
+        traslado_dr.setAttribute("TipoFactorDR", "Tasa")
+        traslado_dr.setAttribute("TasaOCuotaDR", "0.160000")
+        traslado_dr.setAttribute("ImporteDR", f"{total_iva_16:.2f}")
+        
+        traslados_dr.appendChild(traslado_dr)
+        impuestos_dr.appendChild(traslados_dr)
+        doctoRelacionado.appendChild(impuestos_dr)
+        log_debug("ImpuestosDR agregados al DoctoRelacionado")
+    
     pago.appendChild(doctoRelacionado)
     
     pagos.appendChild(pago)
     complemento.appendChild(pagos)
     
+    log_mensaje(f"Complemento de pago creado con valores: Monto=${valores_pago['monto_total']}, Serie={serie_original}, Folio={folio_original}", "OK")
     print("TRANSFORMACIÓN A COMPLEMENTO DE PAGO COMPLETADA")
 
 # PROCESADORES PRINCIPALES
@@ -1268,7 +1374,11 @@ def procesar_aplicacion_anticipo(xml_original, forma_pago="99", metodo_pago="PPD
 def procesar_complemento_pago(xml_original, forma_pago="99"):
     """Función principal para procesar complemento de pago"""
     
-    # PRIMERO extraer el UUID del documento original antes de cualquier transformación
+    # PRIMERO extraer los valores del documento original
+    valores_pago = extraer_valores_documento_original(xml_original)
+    log_debug(f"Valores a usar en complemento: {valores_pago}")
+    
+    # SEGUNDO extraer el UUID del documento original antes de cualquier transformación
     uuid_documento_original = None
     try:
         tree_original = etree.fromstring(xml_original)
@@ -1326,8 +1436,8 @@ def procesar_complemento_pago(xml_original, forma_pago="99"):
     xml_string = etree.tostring(tree, encoding="UTF-8", xml_declaration=True)
     dom = parseString(xml_string)
     
-    # Aplicar transformación a Complemento de Pago pasando el UUID original y forma de pago
-    transformar_a_complemento_pago(dom, uuid_documento_original, forma_pago)
+    # Aplicar transformación a Complemento de Pago pasando el UUID original, forma de pago Y valores extraídos
+    transformar_a_complemento_pago(dom, uuid_documento_original, forma_pago, valores_pago)
     
     # Convertir de vuelta a bytes
     xml_transformado = dom.toxml(encoding="UTF-8")
