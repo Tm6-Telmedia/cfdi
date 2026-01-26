@@ -402,85 +402,216 @@ def extraer_datos_anticipo(xml_productos: bytes, xml_aplicacion: bytes) -> CFDID
         raise PDFGenerationError(f"Error extrayendo datos de anticipo: {str(e)}")
 
 def extraer_conceptos_filemaker(xml_filemaker: bytes) -> List[ConceptoCFDI]:
-    """
-    Extrae conceptos del archivo FileMaker FMPDSORESULT
-    """
     conceptos = []
+    
     try:
         tree = etree.fromstring(xml_filemaker)
-        print(f"✓ Parseando archivo FileMaker, root tag: {tree.tag}")
+        root_tag = tree.tag
         
-        # El namespace de FileMaker
+        # Namespace de FileMaker
         fm_ns = "http://www.filemaker.com/fmpdsoresult"
         
-        # Buscar todos los ROW (filas de datos) con namespace
+        # Buscar TODOS los ROW sin límite
         rows = tree.findall(f".//{{{fm_ns}}}ROW")
         if not rows:
-            # Intentar sin namespace
             rows = tree.findall(".//ROW")
         
-        print(f"✓ Encontradas {len(rows)} filas ROW")
+        total_rows = len(rows)
         
-        for i, row in enumerate(rows):
-            print(f"✓ Procesando ROW {i+1}")
-            
-            # Extraer datos del concepto de esta fila
-            concepto_data = {}
-            
-            # Buscar todos los elementos hijo
-            for child in row:
-                tag_name = child.tag.split('}')[-1] if '}' in child.tag else child.tag
+        if total_rows == 0:
+            return []
+        
+        # Procesar TODOS los ROW
+        for i, row in enumerate(rows, 1):
+            try:
+                # Diccionario para datos del concepto
+                concepto_data = {}
                 
-                if tag_name in ["ClaveProdServ", "cantidad", "Clave_unidad", "unidad", "ConceptoItem", "Monto", "Importe", "DescuentoItem"]:
-                    # Extraer el valor - puede estar en texto directo o en nodo DATA
-                    valor = None
-                    if child.text and child.text.strip():
-                        valor = child.text.strip()
-                    else:
-                        # Buscar nodo DATA (con o sin namespace)
-                        data_node = child.find(f"{{{fm_ns}}}DATA") if fm_ns else None
-                        if data_node is None:
-                            data_node = child.find("DATA")
+                # Campos que necesitamos extraer
+                campos_concepto = ["ClaveProdServ", "cantidad", "Clave_unidad", 
+                                  "ConceptoItem", "Monto", "Importe", "DescuentoItem"]
+                
+                # Buscar cada campo en el ROW
+                for child in row:
+                    # Extraer nombre del tag sin namespace
+                    tag_name = child.tag.split('}')[-1] if '}' in child.tag else child.tag
+                    
+                    # Solo procesar si es un campo de concepto
+                    if tag_name in campos_concepto:
+                        valor = None
                         
+                        # MÉTODO 1: Buscar nodo <DATA> con namespace
+                        data_node = child.find(f"{{{fm_ns}}}DATA")
                         if data_node is not None and data_node.text:
                             valor = data_node.text.strip()
-                    
-                    if valor:
-                        concepto_data[tag_name] = valor
-                        print(f"    {tag_name}: {valor}")
-            
-            # Crear concepto si tiene los datos mínimos
-            if "ConceptoItem" in concepto_data and "Importe" in concepto_data:
-                try:
-                    concepto = ConceptoCFDI(
-                        clave_prod_serv=concepto_data.get("ClaveProdServ", "84111506"),
-                        cantidad=Decimal(concepto_data.get("cantidad", "1")),
-                        unidad=concepto_data.get("Clave_unidad", "EA"),
-                        descripcion=concepto_data.get("ConceptoItem", "Concepto"),
-                        valor_unitario=Decimal(concepto_data.get("Monto", "0")),
-                        importe=Decimal(concepto_data.get("Importe", "0")),
-                        descuento=Decimal(concepto_data.get("DescuentoItem", "0"))
-                    )
-                    conceptos.append(concepto)
-                    print(f"✓ Concepto FileMaker creado: {concepto.descripcion} - ${concepto.importe}")
-                except Exception as e:
-                    print(f"⚠ Error creando concepto: {e}")
-                    print(f"   Datos: {concepto_data}")
-            else:
-                print(f"⚠ ROW sin datos suficientes para concepto")
-                print(f"   Datos encontrados: {list(concepto_data.keys())}")
+                        
+                        # MÉTODO 2: Buscar nodo <DATA> sin namespace
+                        if not valor:
+                            data_node = child.find("DATA")
+                            if data_node is not None and data_node.text:
+                                valor = data_node.text.strip()
+                                
+                        if not valor and child.text:
+                            texto = child.text.strip()
+                            if texto:
+                                valor = texto
+                        
+                        if valor:
+                            concepto_data[tag_name] = valor
+                            # Log resumido
+                            valor_mostrar = valor[:60] + "..." if len(valor) > 60 else valor
+                            print(f"  {tag_name}: {valor_mostrar}")
                 
-                # Debug: mostrar todos los elementos de esta fila
-                print("   Elementos en esta fila:")
-                for child in row:
-                    tag_name = child.tag.split('}')[-1] if '}' in child.tag else child.tag
-                    print(f"     - {tag_name}")
-        
-        print(f"✓ Total conceptos extraídos: {len(conceptos)} de {len(rows)} filas")
+                # Validar que tengamos los datos mínimos
+                if "ConceptoItem" not in concepto_data:
+                    continue
+                
+                if "Importe" not in concepto_data:
+                    continue
+                
+                # Convertir valores numéricos con manejo de errores
+                try:
+                    cantidad_str = concepto_data.get("cantidad", "1")
+                    cantidad = Decimal(cantidad_str.replace(",", ""))
+                    
+                    monto_str = concepto_data.get("Monto", "0")
+                    monto = Decimal(monto_str.replace(",", ""))
+                    
+                    importe_str = concepto_data.get("Importe", "0")
+                    importe = Decimal(importe_str.replace(",", ""))
+                    
+                    descuento_str = concepto_data.get("DescuentoItem", "0")
+                    descuento = Decimal(descuento_str.replace(",", ""))
+                    
+                except (ValueError, Exception) as e:
+                    continue
+                
+                # Crear objeto ConceptoCFDI
+                concepto = ConceptoCFDI(
+                    clave_prod_serv=concepto_data.get("ClaveProdServ", "01010101"),
+                    cantidad=cantidad,
+                    unidad=concepto_data.get("Clave_unidad", "E48"),
+                    descripcion=concepto_data["ConceptoItem"],
+                    valor_unitario=monto,
+                    importe=importe,
+                    descuento=descuento
+                )
+                
+                conceptos.append(concepto)
+                
+                # Log de éxito
+                desc_corta = concepto.descripcion[:50] + "..." if len(concepto.descripcion) > 50 else concepto.descripcion
+                
+            except Exception as e:
+                import traceback
+                traceback.print_exc()
+                continue
         return conceptos
         
     except Exception as e:
-        print(f"Error extrayendo conceptos de FileMaker: {e}")
+        print(f"❌ ERROR CRÍTICO extrayendo conceptos de FileMaker: {e}")
+        import traceback
+        traceback.print_exc()
+        return []
+
+    conceptos = []
+    
+    try:
+        tree = etree.fromstring(xml_filemaker)
+        root_tag = tree.tag
+        print(f"✓ Parseando FileMaker, root tag: {root_tag}")
+        
+        # Namespace de FileMaker
+        fm_ns = "http://www.filemaker.com/fmpdsoresult"
+        
+        # Buscar TODOS los ROW 
+        rows = tree.findall(f".//{{{fm_ns}}}ROW")
+        if not rows:
+            rows = tree.findall(".//ROW")
+        
+        total_rows = len(rows)
+        
+        if total_rows == 0:
+            return []
+        
+        for i, row in enumerate(rows, 1):
+            try:
+                
+                # Diccionario para almacenar datos extraídos
+                concepto_data = {}
+                
+                # Buscar todos los elementos hijo del ROW
+                for child in row:
+                    # Extraer nombre del tag (sin namespace)
+                    tag_name = child.tag.split('}')[-1] if '}' in child.tag else child.tag
+                    
+                    # Solo procesar campos de conceptos
+                    if tag_name in ["ClaveProdServ", "cantidad", "Clave_unidad", "unidad", 
+                                   "ConceptoItem", "Monto", "Importe", "DescuentoItem"]:
+                        
+                        # extraer valor de nodo DATA
+                        valor = None
+                        
+                        # Método 1: Buscar nodo DATA con namespace
+                        data_node = child.find(f"{{{fm_ns}}}DATA")
+                        if data_node is not None and data_node.text:
+                            valor = data_node.text.strip()
+                        else:
+                            # Método 2: Buscar nodo DATA sin namespace
+                            data_node = child.find("DATA")
+                            if data_node is not None and data_node.text:
+                                valor = data_node.text.strip()
+                            else:
+                                # Método 3: Texto directo en el elemento
+                                if child.text and child.text.strip():
+                                    valor = child.text.strip()
+                        
+                        if valor:
+                            concepto_data[tag_name] = valor
+                            print(f"  {tag_name}: {valor[:50] if len(valor) > 50 else valor}")
+                
+                # Validar datos mínimos
+                if "ConceptoItem" not in concepto_data or "Importe" not in concepto_data:
+                    continue
+                
+                # Convertir valores numéricos
+                try:
+                    cantidad = Decimal(concepto_data.get("cantidad", "1").replace(",", ""))
+                    monto = Decimal(concepto_data.get("Monto", "0").replace(",", ""))
+                    importe = Decimal(concepto_data.get("Importe", "0").replace(",", ""))
+                    descuento = Decimal(concepto_data.get("DescuentoItem", "0").replace(",", ""))
+                except (ValueError, Exception) as e:
+                    print(f"  ⚠ Error convirtiendo valores en ROW {i}: {e}")
+                    continue
+                
+                # Crear ConceptoCFDI
+                concepto = ConceptoCFDI(
+                    clave_prod_serv=concepto_data.get("ClaveProdServ", "01010101"),
+                    cantidad=cantidad,
+                    unidad=concepto_data.get("Clave_unidad", "E48"),
+                    descripcion=concepto_data["ConceptoItem"],
+                    valor_unitario=monto,
+                    importe=importe,
+                    descuento=descuento
+                )
+                
+                conceptos.append(concepto)
+                
+                desc_corta = concepto.descripcion[:50] + "..." if len(concepto.descripcion) > 50 else concepto.descripcion
+                print(f"  ✓ Concepto {i} agregado: {desc_corta} - ${importe}")
+                
+            except Exception as e:
+                import traceback
+                traceback.print_exc()
+                continue
+        
+        if len(conceptos) == 0:
+            print("⚠ ADVERTENCIA: No se extrajo ningún concepto")
+        
+        return conceptos
+        
+    except Exception as e:
+        print(f" ERROR extrayendo conceptos: {e}")
         import traceback
         traceback.print_exc()
         return []
