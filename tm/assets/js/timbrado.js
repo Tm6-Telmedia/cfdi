@@ -295,7 +295,7 @@ function procesarXMLUnico(archivo) {
     lector.onload = e => {
         const parser = new DOMParser();
         const xml = parser.parseFromString(e.target.result, "text/xml");
-        xmlOriginal = xml;
+        // xmlOriginal = xml;
         procesarDatosFaltantes(xml);
     };
     lector.readAsText(archivo);
@@ -517,6 +517,9 @@ function validarEntradasXML(xmlDom) {
         //Crear Dom xml
         const parser = new DOMParser();
         const xmlDoc = parser.parseFromString(xmlString, "text/xml");
+        
+        // IMPORTANTE: Guardar el XML parseado en xmlOriginal
+        xmlOriginal = xmlDoc;
 
         //leer etiquetas
         const comprobante = xmlDoc.getElementsByTagName("cfdi:Comprobante")[0];
@@ -529,37 +532,48 @@ function validarEntradasXML(xmlDom) {
 
         const section = document.querySelector('#xmlUnicoSection');
 
+        const lbFolio = document.createElement('label')
+        lbFolio.textContent = 'Folio:'
         const entradaFolio = document.createElement('input');
         entradaFolio.classList.add('entradas');
         entradaFolio.type = 'text';
         entradaFolio.value = folio;
+        section.appendChild(lbFolio)
         section.appendChild(entradaFolio);
+        
+        
+        // Actualizar Folio cuando cambie
+        entradaFolio.addEventListener('input', () => {
+            comprobante.setAttribute("Folio", entradaFolio.value);
+        });
 
+        const lbBase = document.createElement('label')
+        lbBase.textContent = 'Base:'
         const entradaBase = document.createElement('input');
         entradaBase.classList.add('entradas');
         entradaBase.type = 'text';
-        entradaBase.value =base;
+        entradaBase.value = base;
         // entradaBase.placeholder = 'Base';
+        section.appendChild(lbBase)
         section.appendChild(entradaBase);
 
         entradaBase.addEventListener('input', () => {
             traslados.setAttribute("Base", entradaBase.value);
         });
 
+        const lbImporte = document.createElement('label')
+        lbImporte.textContent = 'Importe:'
         const entradaImporte = document.createElement('input');
         entradaImporte.classList.add('entradas');
         entradaImporte.type = 'text';
         entradaImporte.value = importe;
         // entradaImporte.placeholder = 'Importe';
+        section.appendChild(lbImporte)
         section.appendChild(entradaImporte);
 
         entradaImporte.addEventListener('input', () => {
             traslados.setAttribute("Importe", entradaImporte.value);
         });
-
-        console.log(base)
-        console.log(importe)
     }
     reader.readAsText(xmlDom)
 }
-

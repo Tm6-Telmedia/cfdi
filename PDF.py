@@ -558,8 +558,6 @@ def extraer_datos_xml(xml_bytes: bytes) -> CFDIData:
 
                 break
         
-
-        
         # Datos del comprobante con mejor manejo de valores
         tipo_comprobante = comprobante.get("TipoDeComprobante") or ""
         fecha_emision = comprobante.get("Fecha") or ""
