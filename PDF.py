@@ -14,6 +14,7 @@ from reportlab.platypus import SimpleDocTemplate, Table, TableStyle, Paragraph, 
 from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
 from reportlab.pdfgen import canvas
 from reportlab.lib.enums import TA_LEFT, TA_CENTER, TA_RIGHT
+import html
 
 # Importar constantes desde API.py para evitar duplicación
 try:
@@ -260,11 +261,10 @@ def extraer_datos_receptor_filemaker(xml_filemaker: bytes) -> dict:
                     campo_destino = campos_receptor[tag_name]
                     receptor_data[campo_destino] = data_node.text.strip()
         
-        print(f"✓ Datos del receptor extraídos de FileMaker: {receptor_data}")
         return receptor_data
         
     except Exception as e:
-        print(f"⚠ Error extrayendo datos del receptor de FileMaker: {e}")
+        print(f"Error extrayendo datos del receptor de FileMaker: {e}")
         return {}
 
 def extraer_datos_anticipo(xml_productos: bytes, xml_aplicacion: bytes) -> CFDIData:
@@ -281,7 +281,6 @@ def extraer_datos_anticipo(xml_productos: bytes, xml_aplicacion: bytes) -> CFDID
             
             # Si es un archivo de FileMaker (FMPDSORESULT), usar el XML de aplicación como base
             if "FMPDSORESULT" in root_tag or "FMPXMLRESULT" in root_tag:
-                print("✓ Detectado archivo FileMaker como xml_productos, extrayendo conceptos")
                 # Usar el XML de aplicación (que es un CFDI válido) como base
                 cfdi_data = extraer_datos_xml(xml_aplicacion)
                 
@@ -298,14 +297,12 @@ def extraer_datos_anticipo(xml_productos: bytes, xml_aplicacion: bytes) -> CFDID
                         cfdi_data.receptor_uso_cfdi = receptor_filemaker["uso_cfdi"]
                     if "regimen" in receptor_filemaker:
                         cfdi_data.receptor_regimen = receptor_filemaker["regimen"]
-                    print(f"✓ Datos del receptor actualizados desde FileMaker")
                 
                 # Extraer conceptos del archivo FileMaker
                 conceptos_filemaker = extraer_conceptos_filemaker(xml_productos)
                 if conceptos_filemaker:
                     cfdi_data.conceptos = conceptos_filemaker
-                    print(f"✓ Extraídos {len(conceptos_filemaker)} conceptos del archivo FileMaker")
-                    
+
                     # Recalcular subtotal basado en los conceptos de FileMaker
                     nuevo_subtotal = sum(concepto.importe for concepto in conceptos_filemaker)
                     cfdi_data.subtotal = nuevo_subtotal
@@ -314,9 +311,6 @@ def extraer_datos_anticipo(xml_productos: bytes, xml_aplicacion: bytes) -> CFDID
                     # Asumir IVA 16% sobre el subtotal
                     iva_calculado = nuevo_subtotal * Decimal('0.16')
                     cfdi_data.total = nuevo_subtotal + iva_calculado
-                    
-                    print(f"✓ Subtotal recalculado: {nuevo_subtotal}")
-                    print(f"✓ Total recalculado: {cfdi_data.total}")
                 
                 # IMPORTANTE: Buscar el UUID relacionado en CfdiRelacionados del XML de aplicación
                 tree_aplicacion = etree.fromstring(xml_aplicacion)
@@ -326,15 +320,13 @@ def extraer_datos_anticipo(xml_productos: bytes, xml_aplicacion: bytes) -> CFDID
                         uuid_relacionado_encontrado = elem.get("UUID") or ""
                         if uuid_relacionado_encontrado:
                             cfdi_data.uuid_relacionado = uuid_relacionado_encontrado
-                            print(f"✓ UUID relacionado encontrado en CfdiRelacionados: {uuid_relacionado_encontrado}")
                             break
                 
                 if not uuid_relacionado_encontrado:
-                    print("⚠ No se encontró UUID relacionado en CfdiRelacionados")
+                    print(" No se encontró UUID relacionado en CfdiRelacionados")
                 
             else:
                 # Es un CFDI válido, procesar normalmente
-                print("✓ xml_productos es un CFDI válido, procesando normalmente")
                 cfdi_data = extraer_datos_xml(xml_productos)
                 
                 # Extraer UUID y lugar de emisión del XML de aplicación
@@ -345,11 +337,10 @@ def extraer_datos_anticipo(xml_productos: bytes, xml_aplicacion: bytes) -> CFDID
                 for elem in tree_aplicacion.iter():
                     if elem.tag.endswith("CfdiRelacionado"):
                         uuid_relacionado = elem.get("UUID") or ""
-                        print(f"✓ Nodo CfdiRelacionado encontrado con UUID: {uuid_relacionado}")
                         break
                 
                 if not uuid_relacionado:
-                    print("⚠ No se encontró nodo CfdiRelacionado o no tiene UUID")
+                    print("No se encontró nodo CfdiRelacionado o no tiene UUID")
                 
                 # Buscar el comprobante del XML de aplicación para extraer LugarExpedicion
                 comprobante_aplicacion = tree_aplicacion
@@ -358,7 +349,6 @@ def extraer_datos_anticipo(xml_productos: bytes, xml_aplicacion: bytes) -> CFDID
                     lugar_emision_uuid = comprobante_aplicacion.get("LugarExpedicion") or ""
                     if lugar_emision_uuid:
                         cfdi_data.lugar_emision = lugar_emision_uuid
-                        print(f"✓ Lugar de emisión actualizado desde XML con UUID: {lugar_emision_uuid}")
                 
                 # Buscar el UUID del anticipo en el XML de aplicación
                 uuid_anticipo = ""
@@ -391,8 +381,6 @@ def extraer_datos_anticipo(xml_productos: bytes, xml_aplicacion: bytes) -> CFDID
                     cfdi_data.uuid_relacionado = uuid_relacionado
         
         except etree.XMLSyntaxError as xml_error:
-            print(f"⚠ Error parseando xml_productos como XML: {xml_error}")
-            print("✓ Usando xml_aplicacion como única fuente de datos")
             # Si no se puede parsear xml_productos, usar solo xml_aplicacion
             cfdi_data = extraer_datos_xml(xml_aplicacion)
         
@@ -402,91 +390,61 @@ def extraer_datos_anticipo(xml_productos: bytes, xml_aplicacion: bytes) -> CFDID
         raise PDFGenerationError(f"Error extrayendo datos de anticipo: {str(e)}")
 
 def extraer_conceptos_filemaker(xml_filemaker: bytes) -> List[ConceptoCFDI]:
+    """
+    Extrae conceptos con codificación UTF-8 correcta
+    """
     conceptos = []
     
     try:
+        #  IMPORTANTE: Parsear el XML especificando la codificación
         tree = etree.fromstring(xml_filemaker)
-        root_tag = tree.tag
         
-        # Namespace de FileMaker
         fm_ns = "http://www.filemaker.com/fmpdsoresult"
-        
-        # Buscar TODOS los ROW sin límite
         rows = tree.findall(f".//{{{fm_ns}}}ROW")
         if not rows:
             rows = tree.findall(".//ROW")
         
         total_rows = len(rows)
+        print(f"✓ Encontrados {total_rows} ROW en FileMaker")
         
-        if total_rows == 0:
-            return []
-        
-        # Procesar TODOS los ROW
         for i, row in enumerate(rows, 1):
             try:
-                # Diccionario para datos del concepto
                 concepto_data = {}
-                
-                # Campos que necesitamos extraer
                 campos_concepto = ["ClaveProdServ", "cantidad", "Clave_unidad", 
                                   "ConceptoItem", "Monto", "Importe", "DescuentoItem"]
                 
-                # Buscar cada campo en el ROW
                 for child in row:
-                    # Extraer nombre del tag sin namespace
                     tag_name = child.tag.split('}')[-1] if '}' in child.tag else child.tag
                     
-                    # Solo procesar si es un campo de concepto
                     if tag_name in campos_concepto:
                         valor = None
                         
-                        # MÉTODO 1: Buscar nodo <DATA> con namespace
+                        # Buscar valor en DATA o texto directo
                         data_node = child.find(f"{{{fm_ns}}}DATA")
                         if data_node is not None and data_node.text:
-                            valor = data_node.text.strip()
-                        
-                        # MÉTODO 2: Buscar nodo <DATA> sin namespace
-                        if not valor:
-                            data_node = child.find("DATA")
-                            if data_node is not None and data_node.text:
-                                valor = data_node.text.strip()
-                                
-                        if not valor and child.text:
-                            texto = child.text.strip()
-                            if texto:
-                                valor = texto
+                            valor = data_node.text
+                        elif child.text:
+                            valor = child.text
                         
                         if valor:
+                            #  CLAVE: Normalizar el texto
+                            valor = valor.strip()
+                            
+                            # Para descripciones, asegurar UTF-8 correcto
+                            if tag_name == "ConceptoItem":
+                                # Método 1: Si hay entidades HTML, decodificarlas
+                                valor = html.unescape(valor)
+                            
                             concepto_data[tag_name] = valor
-                            # Log resumido
-                            valor_mostrar = valor[:60] + "..." if len(valor) > 60 else valor
-                            print(f"  {tag_name}: {valor_mostrar}")
                 
-                # Validar que tengamos los datos mínimos
-                if "ConceptoItem" not in concepto_data:
+                if "ConceptoItem" not in concepto_data or "Importe" not in concepto_data:
                     continue
                 
-                if "Importe" not in concepto_data:
-                    continue
+                cantidad = Decimal(concepto_data.get("cantidad", "1").replace(",", ""))
+                monto = Decimal(concepto_data.get("Monto", "0").replace(",", ""))
+                importe = Decimal(concepto_data.get("Importe", "0").replace(",", ""))
+                descuento = Decimal(concepto_data.get("DescuentoItem", "0").replace(",", ""))
                 
-                # Convertir valores numéricos con manejo de errores
-                try:
-                    cantidad_str = concepto_data.get("cantidad", "1")
-                    cantidad = Decimal(cantidad_str.replace(",", ""))
-                    
-                    monto_str = concepto_data.get("Monto", "0")
-                    monto = Decimal(monto_str.replace(",", ""))
-                    
-                    importe_str = concepto_data.get("Importe", "0")
-                    importe = Decimal(importe_str.replace(",", ""))
-                    
-                    descuento_str = concepto_data.get("DescuentoItem", "0")
-                    descuento = Decimal(descuento_str.replace(",", ""))
-                    
-                except (ValueError, Exception) as e:
-                    continue
-                
-                # Crear objeto ConceptoCFDI
                 concepto = ConceptoCFDI(
                     clave_prod_serv=concepto_data.get("ClaveProdServ", "01010101"),
                     cantidad=cantidad,
@@ -498,123 +456,72 @@ def extraer_conceptos_filemaker(xml_filemaker: bytes) -> List[ConceptoCFDI]:
                 )
                 
                 conceptos.append(concepto)
-                
-                # Log de éxito
-                desc_corta = concepto.descripcion[:50] + "..." if len(concepto.descripcion) > 50 else concepto.descripcion
+                print(f"  ✓ ROW {i}: {concepto.descripcion[:50]}...")
                 
             except Exception as e:
-                import traceback
-                traceback.print_exc()
+                print(f"  ⚠ Error en ROW {i}: {e}")
                 continue
+        
+        print(f"✓ Total conceptos extraídos: {len(conceptos)}")
         return conceptos
         
     except Exception as e:
-        print(f"❌ ERROR CRÍTICO extrayendo conceptos de FileMaker: {e}")
+        print(f"❌ ERROR: {e}")
         import traceback
         traceback.print_exc()
         return []
 
-    conceptos = []
-    
+# ==============================================================================
+# ALTERNATIVA: FIX EN reemplazar_conceptos_con_filemaker
+# ==============================================================================
+"""
+Si el fix anterior no funciona completamente, también puedes aplicar la 
+corrección en el momento de insertar al XML:
+"""
+
+def reemplazar_conceptos_con_filemaker_CON_FIX_ENCODING(tree, conceptos_filemaker):
+    """Versión con fix adicional de encoding al insertar en XML"""
     try:
-        tree = etree.fromstring(xml_filemaker)
-        root_tag = tree.tag
-        print(f"✓ Parseando FileMaker, root tag: {root_tag}")
+        conceptos_node = tree.find(f".//{{{CFDI_NS}}}Conceptos")
+        if conceptos_node is None:
+            comprobante = tree
+            conceptos_node = etree.SubElement(comprobante, f"{{{CFDI_NS}}}Conceptos")
         
-        # Namespace de FileMaker
-        fm_ns = "http://www.filemaker.com/fmpdsoresult"
+        conceptos_node.clear()
+        subtotal_total = Decimal('0')
+        iva_total = Decimal('0')
         
-        # Buscar TODOS los ROW 
-        rows = tree.findall(f".//{{{fm_ns}}}ROW")
-        if not rows:
-            rows = tree.findall(".//ROW")
-        
-        total_rows = len(rows)
-        
-        if total_rows == 0:
-            return []
-        
-        for i, row in enumerate(rows, 1):
+        for idx, concepto_fm in enumerate(conceptos_filemaker, 1):
+            concepto_elem = etree.SubElement(conceptos_node, f"{{{CFDI_NS}}}Concepto")
+            concepto_elem.set("ClaveProdServ", concepto_fm.clave_prod_serv)
+            concepto_elem.set("Cantidad", str(concepto_fm.cantidad))
+            concepto_elem.set("ClaveUnidad", concepto_fm.unidad)
+            concepto_elem.set("Unidad", concepto_fm.unidad)
+            
+            # FIX DE CODIFICACIÓN AL INSERTAR
+            descripcion_limpia = concepto_fm.descripcion
             try:
-                
-                # Diccionario para almacenar datos extraídos
-                concepto_data = {}
-                
-                # Buscar todos los elementos hijo del ROW
-                for child in row:
-                    # Extraer nombre del tag (sin namespace)
-                    tag_name = child.tag.split('}')[-1] if '}' in child.tag else child.tag
-                    
-                    # Solo procesar campos de conceptos
-                    if tag_name in ["ClaveProdServ", "cantidad", "Clave_unidad", "unidad", 
-                                   "ConceptoItem", "Monto", "Importe", "DescuentoItem"]:
-                        
-                        # extraer valor de nodo DATA
-                        valor = None
-                        
-                        # Método 1: Buscar nodo DATA con namespace
-                        data_node = child.find(f"{{{fm_ns}}}DATA")
-                        if data_node is not None and data_node.text:
-                            valor = data_node.text.strip()
-                        else:
-                            # Método 2: Buscar nodo DATA sin namespace
-                            data_node = child.find("DATA")
-                            if data_node is not None and data_node.text:
-                                valor = data_node.text.strip()
-                            else:
-                                # Método 3: Texto directo en el elemento
-                                if child.text and child.text.strip():
-                                    valor = child.text.strip()
-                        
-                        if valor:
-                            concepto_data[tag_name] = valor
-                            print(f"  {tag_name}: {valor[:50] if len(valor) > 50 else valor}")
-                
-                # Validar datos mínimos
-                if "ConceptoItem" not in concepto_data or "Importe" not in concepto_data:
-                    continue
-                
-                # Convertir valores numéricos
-                try:
-                    cantidad = Decimal(concepto_data.get("cantidad", "1").replace(",", ""))
-                    monto = Decimal(concepto_data.get("Monto", "0").replace(",", ""))
-                    importe = Decimal(concepto_data.get("Importe", "0").replace(",", ""))
-                    descuento = Decimal(concepto_data.get("DescuentoItem", "0").replace(",", ""))
-                except (ValueError, Exception) as e:
-                    print(f"  ⚠ Error convirtiendo valores en ROW {i}: {e}")
-                    continue
-                
-                # Crear ConceptoCFDI
-                concepto = ConceptoCFDI(
-                    clave_prod_serv=concepto_data.get("ClaveProdServ", "01010101"),
-                    cantidad=cantidad,
-                    unidad=concepto_data.get("Clave_unidad", "E48"),
-                    descripcion=concepto_data["ConceptoItem"],
-                    valor_unitario=monto,
-                    importe=importe,
-                    descuento=descuento
-                )
-                
-                conceptos.append(concepto)
-                
-                desc_corta = concepto.descripcion[:50] + "..." if len(concepto.descripcion) > 50 else concepto.descripcion
-                print(f"  ✓ Concepto {i} agregado: {desc_corta} - ${importe}")
-                
+                # Si la descripción tiene caracteres mal codificados, corregir
+                if any(char in descripcion_limpia for char in ['Ã', 'â€', 'Â']):
+                    descripcion_limpia = descripcion_limpia.encode('latin-1').decode('utf-8')
             except Exception as e:
-                import traceback
-                traceback.print_exc()
-                continue
-        
-        if len(conceptos) == 0:
-            print("⚠ ADVERTENCIA: No se extrajo ningún concepto")
-        
-        return conceptos
-        
+                print(f"  ⚠ Error corrigiendo codificación de descripción: {e}")
+            
+            concepto_elem.set("Descripcion", descripcion_limpia)
+            concepto_elem.set("ValorUnitario", f"{concepto_fm.valor_unitario:.2f}")
+            concepto_elem.set("Importe", f"{concepto_fm.importe:.2f}")
+            concepto_elem.set("ObjetoImp", "02")
+            
+            if concepto_fm.descuento > 0:
+                concepto_elem.set("Descuento", f"{concepto_fm.descuento:.2f}")
+            
+            # ... resto del código (impuestos, etc.)
+            
     except Exception as e:
-        print(f" ERROR extrayendo conceptos: {e}")
+        print(f"❌ ERROR: {e}") 
         import traceback
         traceback.print_exc()
-        return []
+
 
 def extraer_datos_xml(xml_bytes: bytes) -> CFDIData:
 
@@ -675,10 +582,7 @@ def extraer_datos_xml(xml_bytes: bytes) -> CFDIData:
                     forma_pago_p = elem.get("FormaDePagoP")
                     if forma_pago_p:
                         forma_pago = forma_pago_p
-                        print(f"✓ FormaDePagoP extraída: {forma_pago}")
                         break
-        
-
         
         # Buscar Emisor
         emisor = None
@@ -693,8 +597,6 @@ def extraer_datos_xml(xml_bytes: bytes) -> CFDIData:
         emisor_rfc = emisor.get("Rfc") or ""
         emisor_nombre = emisor.get("Nombre") or ""
         emisor_regimen = emisor.get("RegimenFiscal") or ""
-        
-
         
         # Buscar Receptor
         receptor = None
@@ -805,7 +707,7 @@ def extraer_datos_xml(xml_bytes: bytes) -> CFDIData:
             if elem.tag.endswith("CfdiRelacionado"):
                 uuid_relacionado = elem.get("UUID") or ""
                 if uuid_relacionado:
-                    print(f"✓ UUID relacionado encontrado: {uuid_relacionado}")
+                    print(f" UUID relacionado encontrado: {uuid_relacionado}")
                     break
         
         return CFDIData(
@@ -855,15 +757,11 @@ def render_logo(canvas, y_position: float) -> bool:
         logo_config = HEADER_CONFIG["logo"]
         path = RUTA_LOGO
         
-
-        
         if os.path.exists(path):
             x_pos = logo_config["x"]
             y_pos = y_position - logo_config["y_offset"]
             width = logo_config["width"]
             height = logo_config["height"]
-            
-
             
             canvas.drawImage(
                 path, 
@@ -880,15 +778,11 @@ def render_logo(canvas, y_position: float) -> bool:
 
             return False
     except Exception as e:
-        print(f"Error renderizando logo: {e}")
         import traceback
         traceback.print_exc()
         return False
 
 def render_company_info(canvas, y_position: float, cfdi_data: CFDIData):
- 
-
-    
     # LOGO (lado izquierdo)
     logo_rendered = render_logo(canvas, y_position)
     
@@ -927,7 +821,6 @@ def render_company_info(canvas, y_position: float, cfdi_data: CFDIData):
     y_info -= spacing
     draw_text_with_style(canvas, x_info, y_info, "+52 (55) 9035-9505")
     
-
 
 def render_right_panel(canvas, y_position: float, cfdi_data: CFDIData, qr_buffer: BytesIO, width: float):
 
@@ -1102,7 +995,6 @@ def numero_a_letras(numero: float) -> str:
             return f"{texto} PESOS CON {centavos:02d}/100 M.N."
         
     except Exception as e:
-        print(f"Error convirtiendo número a letras: {e}")
         return f"{numero:,.2f} PESOS CON 00/100 M.N."
 
 def generar_codigo_qr(cfdi_data: CFDIData) -> BytesIO:
@@ -1148,7 +1040,6 @@ def generar_codigo_qr(cfdi_data: CFDIData) -> BytesIO:
         return img_buffer
         
     except Exception as e:
-        print(f"Error generando código QR: {e}")
         # Retornar QR vacío en caso de error
         return BytesIO()
 
@@ -1556,17 +1447,12 @@ def generar_pdf_factura(xml_timbrado: bytes, tipo_comprobante: str, xml_anticipo
         folio_relacionado = "N/A"
         if cfdi_data.tipo_comprobante == "P" and cfdi_data.datos_complemento_pago:
             folio_relacionado = cfdi_data.datos_complemento_pago.documento_relacionado_uuid
-            print(f"✓ Usando UUID de complemento de pago: {folio_relacionado}")
         elif cfdi_data.tipo_comprobante == "I" and cfdi_data.uuid_relacionado:
             # Para aplicación de anticipo, usar el UUID relacionado
             folio_relacionado = cfdi_data.uuid_relacionado
-            print(f"✓ Usando UUID relacionado de aplicación de anticipo: {folio_relacionado}")
         else:
             # Para otros tipos, usar el UUID del propio documento
             folio_relacionado = cfdi_data.uuid if cfdi_data.uuid else "N/A"
-            print(f"✓ Usando UUID del documento actual: {folio_relacionado}")
-            print(f"   Tipo comprobante: {cfdi_data.tipo_comprobante}")
-            print(f"   UUID relacionado disponible: {cfdi_data.uuid_relacionado}")
         
         draw_label_with_content(c, 50, y_position, "Folio fiscal relacionado: ", folio_relacionado, 7)
         

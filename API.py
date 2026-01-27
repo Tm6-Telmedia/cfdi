@@ -65,6 +65,26 @@ def extraer_campo_filemaker(row, campo_nombre: str, fm_ns: str = FILEMAKER_NAMES
                 return data_node.text.strip()
     return ""
 
+def extraer_folio_serie_filemaker(xml_filemaker: bytes) -> tuple:
+    """Extrae folio y serie del archivo FileMaker"""
+    tree, row = parsear_filemaker_xml(xml_filemaker)
+    if not row:
+        return None, None
+    serie = extraer_campo_filemaker(row, "serie") or "C"
+    folio = extraer_campo_filemaker(row, "folio") or ""
+    return serie, folio
+
+
+def aplicar_folio_serie_xml(tree, serie=None, folio=None):
+    """Aplica serie y folio al XML"""
+    try:
+        if serie:
+            tree.set("Serie", serie)
+        if folio:
+            tree.set("Folio", folio)
+    except Exception as e:
+        print(f"Error aplicando folio/serie: {e}")
+
 def log_debug(mensaje: str):
     """Helper para logs de debug"""
     print(f"✓ DEBUG: {mensaje}")
@@ -84,17 +104,17 @@ def extraer_moneda_filemaker(xml_filemaker: bytes) -> tuple:
     if not row:
         return "MXN", "1"
     
-    log_debug("Parseando FileMaker para extraer moneda...")
+    # log_debug("Parseando FileMaker para extraer moneda...")
     
     moneda = extraer_campo_filemaker(row, "Moneda_Simbolo") or "MXN"
     tipo_cambio = extraer_campo_filemaker(row, "TipoCambio") or "1"
     
-    if moneda != "MXN":
-        log_debug(f"Moneda encontrada: {moneda}")
-    if tipo_cambio != "1":
-        log_debug(f"Tipo cambio encontrado: {tipo_cambio}")
+    # if moneda != "MXN":
+    #     log_debug(f"Moneda encontrada: {moneda}")
+    # if tipo_cambio != "1":
+    #     log_debug(f"Tipo cambio encontrado: {tipo_cambio}")
     
-    log_debug(f"FileMaker - Moneda: {moneda}, Tipo de cambio: {tipo_cambio}")
+    # log_debug(f"FileMaker - Moneda: {moneda}, Tipo de cambio: {tipo_cambio}")
     return moneda, tipo_cambio
 
 # CONSTANTES GLOBALES
@@ -191,11 +211,9 @@ def agregar_forma_pago_xml(tree, forma_pago, tipo_comprobante=None, metodo_pago=
                 log_mensaje(f"Forma de pago '{forma_pago}' sera aplicada en FormaDePagoP", "OK")
             else:
                 comprobante.set("FormaPago", forma_pago)
-                log_mensaje(f"Forma de pago '{forma_pago}' agregada al XML", "OK")
                 
                 if metodo_pago:
                     comprobante.set("MetodoPago", metodo_pago)
-                    log_mensaje(f"Metodo de pago '{metodo_pago}' agregado al XML", "OK")
         else:
             log_mensaje("No se encontro el nodo Comprobante", "ADVERTENCIA")
     except Exception as e:
@@ -217,6 +235,10 @@ def obtener_no_certificado(ruta_cer):
     return serial_ascii
 
 def generar_sello(xml_bytes, ruta_cer, ruta_key, pwd_key):
+
+    if isinstance(xml_bytes, str):
+        xml_bytes = xml_bytes.encode('utf-8')
+
     tree = etree.fromstring(xml_bytes)
 
     # Certificado
@@ -237,7 +259,7 @@ def generar_sello(xml_bytes, ruta_cer, ruta_key, pwd_key):
 
     # Sello
     sello = private_key.sign(
-        cadena_original.encode(),
+        cadena_original.encode('utf-8'),
         padding.PKCS1v15(),
         hashes.SHA256()
     )
@@ -246,7 +268,7 @@ def generar_sello(xml_bytes, ruta_cer, ruta_key, pwd_key):
     tree.attrib["Sello"] = sello_b64
     tree.attrib["Certificado"] = certificado_b64
 
-    return etree.tostring(tree, encoding="UTF-8", xml_declaration=True, pretty_print=True)
+    return etree.tostring(tree, encoding="utf-8", xml_declaration=True, pretty_print=True)
 
 def timbrar_con_sf(xml_bytes):
     try:
@@ -255,36 +277,29 @@ def timbrar_con_sf(xml_bytes):
         
         result = client.service.timbrar(usuario, contrasena, xml_b64, False)
         
-        print(f"RESPUESTA DEL PAC - Status: {result.status}")
-        
         if result.status != 200:
             mensaje = getattr(result, 'mensaje', 'Error desconocido en el timbrado')
-            print(f"ERROR DEL PAC: {mensaje}")
             return None, mensaje
         
         # DEBUG: Verificar qué contiene result
-        print(f"DEBUG - Atributos de result: {dir(result)}")
-        print(f"DEBUG - Tiene resultados: {hasattr(result, 'resultados')}")
+        # print(f"DEBUG - Atributos de result: {dir(result)}")
+        # print(f"DEBUG - Tiene resultados: {hasattr(result, 'resultados')}")
         
         # Verificar que resultados existe y tiene elementos
         if not hasattr(result, 'resultados') or not result.resultados or len(result.resultados) == 0:
             print("DEBUG - No hay resultados en la respuesta del PAC")
             return None, "No se recibieron resultados del PAC"
         
-        print(f"DEBUG - Número de resultados: {len(result.resultados)}")
         primer_resultado = result.resultados[0]
-        print(f"DEBUG - Atributos del primer resultado: {dir(primer_resultado)}")
         
         cfdi = primer_resultado.cfdiTimbrado
-        print(f"DEBUG - cfdiTimbrado es None: {cfdi is None}")
-        if cfdi:
-            print(f"DEBUG - Tipo de cfdi: {type(cfdi)}")
-            print(f"DEBUG - Longitud de cfdi: {len(cfdi) if hasattr(cfdi, '__len__') else 'N/A'}")
+        # if cfdi:
+        #     print(f"DEBUG - Tipo de cfdi: {type(cfdi)}")
+        #     print(f"DEBUG - Longitud de cfdi: {len(cfdi) if hasattr(cfdi, '__len__') else 'N/A'}")
         
         # Verificar que cfdi no sea None
         if cfdi is None:
             if hasattr(primer_resultado, 'mensaje'):
-                print(f"DEBUG - Mensaje del resultado: {primer_resultado.mensaje}")
                 return None, f"El PAC retornó vacío: {primer_resultado.mensaje}"
             return None, "El PAC retornó un CFDI vacío"
         
@@ -409,7 +424,6 @@ def insertar_uuid_en_cfdi_relacionado(xml_bytes: bytes, uuid: str) -> bytes:
             if elem.tag.endswith("CfdiRelacionado"):
                 # Insertar el UUID
                 elem.set("UUID", uuid)
-                log_mensaje(f"UUID {uuid} insertado en CfdiRelacionado", "OK")
                 break
         
         # Convertir de vuelta a bytes
@@ -433,7 +447,6 @@ def agregar_cfdi_relacionados_pre_sellado(xml_bytes: bytes, uuid_relacionado: st
                 break
         
         if cfdi_relacionados_existente is not None:
-            print("✓ CfdiRelacionados ya existe, actualizando UUID")
             for child in cfdi_relacionados_existente.childNodes:
                 if child.nodeType == child.ELEMENT_NODE and child.tagName.endswith("CfdiRelacionado"):
                     child.setAttribute("UUID", uuid_relacionado)
@@ -462,8 +475,6 @@ def agregar_cfdi_relacionados_pre_sellado(xml_bytes: bytes, uuid_relacionado: st
                     comprobante.insertBefore(cfdi_relacionados, first_child)
                 else:
                     comprobante.appendChild(cfdi_relacionados)
-            
-            print(f"✓ CfdiRelacionados agregado pre-sellado con UUID {uuid_relacionado}")
         
         xml_result = dom.toxml(encoding="UTF-8")
         return xml_result.encode('utf-8') if isinstance(xml_result, str) else xml_result
@@ -480,7 +491,7 @@ def actualizar_receptor_con_filemaker(tree, xml_filemaker_bytes):
         receptor_data = extraer_datos_receptor_filemaker(xml_filemaker_bytes)
         
         if not receptor_data:
-            print("⚠ No se encontraron datos del receptor en FileMaker")
+            print("No se encontraron datos del receptor en FileMaker")
             return
         
         # Buscar el nodo Receptor en el XML
@@ -491,31 +502,24 @@ def actualizar_receptor_con_filemaker(tree, xml_filemaker_bytes):
                 break
         
         if receptor is None:
-            print("⚠ No se encontró nodo Receptor en el XML")
+            print(" No se encontró nodo Receptor en el XML")
             return
         
         # Actualizar atributos del receptor con datos del FileMaker
         if "nombre" in receptor_data:
             receptor.set("Nombre", receptor_data["nombre"])
-            print(f"✓ Receptor Nombre actualizado: {receptor_data['nombre']}")
         
         if "rfc" in receptor_data:
             receptor.set("Rfc", receptor_data["rfc"])
-            print(f"✓ Receptor RFC actualizado: {receptor_data['rfc']}")
         
         if "domicilio" in receptor_data:
             receptor.set("DomicilioFiscalReceptor", receptor_data["domicilio"])
-            print(f"✓ Receptor CP actualizado: {receptor_data['domicilio']}")
         
         if "uso_cfdi" in receptor_data:
             receptor.set("UsoCFDI", receptor_data["uso_cfdi"])
-            print(f"✓ Receptor UsoCFDI actualizado: {receptor_data['uso_cfdi']}")
         
         if "regimen" in receptor_data:
             receptor.set("RegimenFiscalReceptor", receptor_data["regimen"])
-            print(f"✓ Receptor Regimen actualizado: {receptor_data['regimen']}")
-        
-        print("✓ Datos del receptor actualizados en el XML desde FileMaker")
         
     except Exception as e:
         print(f"⚠ Error actualizando receptor con FileMaker: {e}")
@@ -539,7 +543,6 @@ def reemplazar_conceptos_con_filemaker(tree, conceptos_filemaker):
         total_conceptos = len(conceptos_filemaker)
         # Iterar sobre TODOS los conceptos de FileMaker
         for idx, concepto_fm in enumerate(conceptos_filemaker, 1):
-            print(f"➤ Agregando concepto {idx}/{total_conceptos}")
             
             # Crear elemento Concepto
             concepto_elem = etree.SubElement(conceptos_node, f"{{{CFDI_NS}}}Concepto")
@@ -629,7 +632,6 @@ def generar_respuesta_dual_anticipo(xml_timbrado, xml_original, xml_aplicacion):
     try:
         # PASO 1: Guardar el XML timbrado localmente
         nombre_xml = guardar_xml(xml_timbrado, "I")
-        log_mensaje(f"XML DE ANTICIPO GUARDADO: {nombre_xml}", "OK")
         
         # PASO 2: Intentar generar PDF con ambos XMLs
         pdf_bytes = None
@@ -646,13 +648,10 @@ def generar_respuesta_dual_anticipo(xml_timbrado, xml_original, xml_aplicacion):
                 xml_anticipo=xml_original      # XML con datos adicionales (FileMaker)
             )
             nombre_pdf = guardar_pdf(pdf_bytes, "I")
-            log_mensaje(f"PDF DE ANTICIPO GENERADO EXITOSAMENTE: {nombre_pdf}", "OK")
         except PDFGenerationError as e:
             error_pdf = str(e)
-            print(f"ERROR: ERROR GENERANDO PDF DE ANTICIPO: {error_pdf}")
         except Exception as e:
             error_pdf = f"Error inesperado en PDF de anticipo: {str(e)}"
-            print(f"ERROR: ERROR INESPERADO GENERANDO PDF DE ANTICIPO: {e}")
         
         # Preparar respuesta
         respuesta = {
@@ -687,13 +686,10 @@ def generar_respuesta_dual(xml_timbrado, tipo_comprobante):
         try:
             pdf_bytes = generar_pdf_factura(xml_timbrado, tipo_comprobante)
             nombre_pdf = guardar_pdf(pdf_bytes, tipo_comprobante)
-            print(f" PDF GENERADO EXITOSAMENTE: {nombre_pdf}")
         except PDFGenerationError as e:
             error_pdf = str(e)
-            print(f" ERROR GENERANDO PDF: {error_pdf}")
         except Exception as e:
             error_pdf = f"Error inesperado en PDF: {str(e)}"
-            print(f" ERROR INESPERADO GENERANDO PDF: {e}")
         
         # Preparar respuesta
         respuesta = {
@@ -724,18 +720,15 @@ def asegurar_namespaces_xml(xmlDom):
     # Asegurar namespace xsi
     if not comprobante.hasAttribute("xmlns:xsi"):
         comprobante.setAttribute("xmlns:xsi", "http://www.w3.org/2001/XMLSchema-instance")
-        log_mensaje("Namespace xsi agregado", "OK")
     
     # Asegurar namespace cfdi
     if not comprobante.hasAttribute("xmlns:cfdi"):
         comprobante.setAttribute("xmlns:cfdi", CFDI_NS)
-        log_mensaje("Namespace cfdi agregado", "OK")
     
     # Asegurar schemaLocation básico
     if not comprobante.hasAttribute("xsi:schemaLocation"):
         comprobante.setAttribute("xsi:schemaLocation", 
                                 "http://www.sat.gob.mx/cfd/4 http://www.sat.gob.mx/sitio_internet/cfd/4/cfdv40.xsd")
-        log_mensaje("schemaLocation básico agregado", "OK")
 
 # TRANSFORMACIONES ESPECÍFICAS - APLICACIÓN DE ANTICIPO
 def transformar_a_aplicacion_anticipo(xmlDom, moneda="MXN", tipo_cambio="1", conceptos_ya_reemplazados=False):
@@ -824,14 +817,11 @@ def transformar_a_aplicacion_anticipo(xmlDom, moneda="MXN", tipo_cambio="1", con
     comprobante.setAttribute("SubTotal", f"{subTotalCalculado:.2f}")
     comprobante.setAttribute("Descuento", f"{montoAnticipo:.2f}")
     
-    print(f"OK: SubTotal calculado de todos los conceptos: {subTotalCalculado:.2f}")
-    
     # 2.1. Establecer Moneda y TipoCambio desde FileMaker
-    log_debug(f"Estableciendo Moneda={moneda}, TipoCambio={tipo_cambio}")
+    # log_debug(f"Estableciendo Moneda={moneda}, TipoCambio={tipo_cambio}")
     comprobante.setAttribute("Moneda", moneda)
     if tipo_cambio != "1":  # Solo establecer TipoCambio si no es 1
         comprobante.setAttribute("TipoCambio", tipo_cambio)
-        log_debug(f"TipoCambio establecido: {tipo_cambio}")
     else:
         log_debug("TipoCambio es 1, no se establece atributo")
     
@@ -922,25 +912,21 @@ def transformar_a_aplicacion_anticipo(xmlDom, moneda="MXN", tipo_cambio="1", con
             comprobante.insertBefore(conceptos, complementoExistente)
         else:
             comprobante.appendChild(conceptos)
-        print("✓ Conceptos creados para Aplicación de Anticipo con descuento a nivel concepto")
     else:
         # Si los conceptos ya existen
         conceptosArray = conceptos.getElementsByTagNameNS(CFDI_NS, "Concepto")
         if conceptosArray.length == 0:
             conceptosArray = conceptos.getElementsByTagName("cfdi:Concepto")
         
-        print(f"✓ Encontrados {conceptosArray.length} conceptos")
         
         # CORRECCIÓN: Si los conceptos ya fueron reemplazados con datos de FileMaker, NO modificar las descripciones
         if conceptos_ya_reemplazados:
-            print("✓ Los conceptos ya fueron reemplazados con datos de FileMaker, manteniendo descripciones originales")
             
             # Solo asegurar que todos los conceptos tengan ObjetoImp correcto
             for i in range(conceptosArray.length):
                 concepto = conceptosArray[i]
                 concepto.setAttribute("ObjetoImp", "02")  # 02 para SÍ objeto de impuestos
                 
-            print(f"✓ Conceptos de FileMaker preservados ({conceptosArray.length} conceptos)")
         else:
             # Si hay conceptos pero NO vienen de FileMaker, aplicar la lógica anterior
             if conceptosArray.length > 0:
@@ -955,18 +941,16 @@ def transformar_a_aplicacion_anticipo(xmlDom, moneda="MXN", tipo_cambio="1", con
                 if "anticipo" not in descripcionActual.lower():
                     primerConcepto.setAttribute("Descripcion", "Anticipo del bien o servicio")
                 
-                print(f"✓ Concepto ajustado: {importeOriginal:.2f} (manteniendo importe original)")
                 
                 # MANTENER impuestos del concepto existentes
                 impuestosConcepto = primerConcepto.getElementsByTagName("cfdi:Impuestos")[0] if primerConcepto.getElementsByTagName("cfdi:Impuestos") else None
                 if impuestosConcepto:
-                    print("✓ Impuestos mantenidos en el concepto")
+                    print(" Impuestos mantenidos en el concepto")
                 else:
-                    print("⚠ ADVERTENCIA: No se encontraron impuestos en el concepto")
+                    print(" ADVERTENCIA: No se encontraron impuestos en el concepto")
                 
                 # IMPORTANTE: Agregar el descuento a nivel de concepto
                 primerConcepto.setAttribute("Descuento", f"{montoAnticipo:.2f}")
-                print(f"✓ Descuento de {montoAnticipo:.2f} agregado al concepto")
     
     # 8. AHORA calcular el Total final con los impuestos que quedaron
     impuestosTotal = 0
@@ -1010,7 +994,6 @@ def transformar_a_aplicacion_anticipo(xmlDom, moneda="MXN", tipo_cambio="1", con
             trasladosComprobante[0].setAttribute("Importe", f"{impuestosTotal:.2f}")
             trasladosComprobante[0].setAttribute("Base", f"{subTotalCalculado:.2f}")
         
-        print(f"✓ Impuestos recalculados sumando conceptos: {impuestosTotal:.2f}")
     else:
         # Si no hay impuestos, crear el nodo de impuestos para aplicación de anticipo
         impuestosNode = xmlDom.createElementNS(CFDI_NS, "cfdi:Impuestos")
@@ -1038,14 +1021,13 @@ def transformar_a_aplicacion_anticipo(xmlDom, moneda="MXN", tipo_cambio="1", con
         else:
             comprobante.appendChild(impuestosNode)
         
-        print(f"✓ Impuestos creados para aplicación de anticipo: {impuestosTotal}")
     
     # 9. Calcular Total final (SubTotal - Descuento + Impuestos)
     # Para aplicación de anticipo, el Total debe ser igual al monto del anticipo recibido
     totalCalculado = subTotalCalculado - montoAnticipo + impuestosTotal
     comprobante.setAttribute("Total", f"{totalCalculado:.2f}")
     
-    print(f"✓ Total final calculado: {subTotalCalculado:.2f} - {montoAnticipo:.2f} + {impuestosTotal:.2f} = {totalCalculado:.2f}")
+    # print(f"✓ Total final calculado: {subTotalCalculado:.2f} - {montoAnticipo:.2f} + {impuestosTotal:.2f} = {totalCalculado:.2f}")
     
     # Verificar que el Total coincida con el anticipo recibido
     if abs(totalCalculado - montoAnticipoRecibido) > 0.01:
@@ -1058,7 +1040,6 @@ def transformar_a_aplicacion_anticipo(xmlDom, moneda="MXN", tipo_cambio="1", con
             nodoImpuestos = impuestosComprobanteNode[0]
             remover_nodo_seguro(comprobante, nodoImpuestos, "Nodo Impuestos del Comprobante (Total = 0 sin impuestos)")
     
-    print("✓ TRANSFORMACIÓN A APLICACIÓN DE ANTICIPO COMPLETADA")
 
 def extraer_valores_documento_original(xml_bytes):
     """
@@ -1079,7 +1060,7 @@ def extraer_valores_documento_original(xml_bytes):
             if total_impuestos and float(total_impuestos) > 0:
                 tiene_impuestos = True
         
-        log_debug(f"Valores extraídos del documento original: Total={total}, Tiene impuestos={tiene_impuestos}")
+        # log_debug(f"Valores extraídos del documento original: Total={total}, Tiene impuestos={tiene_impuestos}")
         
         return {
             'monto_total': total,
@@ -1090,7 +1071,6 @@ def extraer_valores_documento_original(xml_bytes):
         }
         
     except Exception as e:
-        log_error("Error extrayendo valores del documento original", e)
         return {
             'monto_total': '1000.00',
             'saldo_anterior': '1000.00',
@@ -1114,12 +1094,10 @@ def transformar_a_complemento_pago(xmlDom, uuid_documento_original=None, forma_p
     
     # IMPORTANTE: Extraer la moneda original ANTES de hacer cambios
     moneda_original = comprobante.getAttribute("Moneda") or "MXN"
-    log_debug(f"Moneda original extraída para complemento: {moneda_original}")
     
     # NUEVO: Extraer Serie y Folio del documento original
     serie_original = comprobante.getAttribute("Serie") or "A"
     folio_original = comprobante.getAttribute("Folio") or "1"
-    log_debug(f"Serie y Folio originales: {serie_original}-{folio_original}")
 
     comprobante.setAttribute("TipoDeComprobante", "P")
     
@@ -1127,7 +1105,6 @@ def transformar_a_complemento_pago(xmlDom, uuid_documento_original=None, forma_p
     comprobante.setAttribute("Total", "0")
     
     comprobante.setAttribute("Moneda", "XXX")
-    log_debug("Moneda establecida en complemento: XXX (obligatorio para tipo P)")
         
     if not comprobante.getAttribute("Exportacion"):
         comprobante.setAttribute("Exportacion", "01")
@@ -1238,7 +1215,6 @@ def transformar_a_complemento_pago(xmlDom, uuid_documento_original=None, forma_p
         
         totales.setAttribute("TotalTrasladosBaseIVA16", f"{base_iva_16:.2f}")
         totales.setAttribute("TotalTrasladosImpuestoIVA16", f"{total_iva_16:.2f}")
-        log_debug(f"Impuestos agregados - Base: {base_iva_16:.2f}, IVA: {total_iva_16:.2f}")
     
     pagos.appendChild(totales)
     
@@ -1247,7 +1223,6 @@ def transformar_a_complemento_pago(xmlDom, uuid_documento_original=None, forma_p
     fechaActual = datetime.now().strftime("%Y-%m-%dT%H:%M:%S")
     pago.setAttribute("FechaPago", fechaActual)
     pago.setAttribute("FormaDePagoP", forma_pago)
-    print(f"OK: FormaDePagoP establecida en: {forma_pago}")
     pago.setAttribute("MonedaP", moneda_original)
     # Siempre establecer TipoCambioP como "1" (obligatorio para el SAT)
     pago.setAttribute("TipoCambioP", "1")
@@ -1272,7 +1247,6 @@ def transformar_a_complemento_pago(xmlDom, uuid_documento_original=None, forma_p
         traslados_p.appendChild(traslado_p)
         impuestos_pago.appendChild(traslados_p)
         pago.appendChild(impuestos_pago)
-        log_debug("ImpuestosP agregados al nodo Pago")
     
     # Crear nodo DoctoRelacionado con valores correctos y serie/folio originales
     doctoRelacionado = xmlDom.createElementNS(PAGO_NS, "pago20:DoctoRelacionado")
@@ -1289,7 +1263,6 @@ def transformar_a_complemento_pago(xmlDom, uuid_documento_original=None, forma_p
     # CORREGIR: ObjetoImpDR debe ser "02" si tiene impuestos, "01" si no
     objeto_imp_dr = "02" if valores_pago['tiene_impuestos'] else "01"
     doctoRelacionado.setAttribute("ObjetoImpDR", objeto_imp_dr)
-    log_debug(f"ObjetoImpDR establecido en: {objeto_imp_dr}")
     
     # NUEVO: Agregar impuestos al documento relacionado si corresponde
     if valores_pago['tiene_impuestos']:
@@ -1310,15 +1283,11 @@ def transformar_a_complemento_pago(xmlDom, uuid_documento_original=None, forma_p
         traslados_dr.appendChild(traslado_dr)
         impuestos_dr.appendChild(traslados_dr)
         doctoRelacionado.appendChild(impuestos_dr)
-        log_debug("ImpuestosDR agregados al DoctoRelacionado")
     
     pago.appendChild(doctoRelacionado)
     
     pagos.appendChild(pago)
     complemento.appendChild(pagos)
-    
-    log_mensaje(f"Complemento de pago creado con valores: Monto=${valores_pago['monto_total']}, Serie={serie_original}, Folio={folio_original}", "OK")
-    print("TRANSFORMACIÓN A COMPLEMENTO DE PAGO COMPLETADA")
 
 # PROCESADORES PRINCIPALES
 def procesar_aplicacion_anticipo(xml_original, forma_pago="99", metodo_pago="PPD", uuid_relacionado=None, conceptos_filemaker=None, moneda_filemaker="MXN", tipo_cambio_filemaker="1", xml_filemaker_bytes=None):
@@ -1335,11 +1304,13 @@ def procesar_aplicacion_anticipo(xml_original, forma_pago="99", metodo_pago="PPD
     if conceptos_filemaker:
         reemplazar_conceptos_con_filemaker(tree, conceptos_filemaker)
         conceptos_ya_reemplazados = True  # Marcar que los conceptos ya fueron reemplazados
-        print("✓ Conceptos reemplazados con datos de FileMaker")
     
     # NUEVO: Si hay XML de FileMaker, actualizar datos del receptor
     if xml_filemaker_bytes:
         actualizar_receptor_con_filemaker(tree, xml_filemaker_bytes)
+        # Extraer y aplicar folio/serie de FileMaker
+        serie_fm, folio_fm = extraer_folio_serie_filemaker(xml_filemaker_bytes)
+        aplicar_folio_serie_xml(tree, serie_fm, folio_fm)
     
     # Validar estructura de Ingreso/Egreso
     tipo_comprobante = tree.attrib.get("TipoDeComprobante", "")
@@ -1360,7 +1331,6 @@ def procesar_aplicacion_anticipo(xml_original, forma_pago="99", metodo_pago="PPD
             'xmlns:cfdi="http://www.sat.gob.mx/cfd/4"',
             'xmlns:cfdi="http://www.sat.gob.mx/cfd/4" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"'
         )
-        print("✓ Namespace xsi agregado al XML antes del parsing")
     
     # Verificar schemaLocation
     if 'xsi:schemaLocation=' not in xml_string_str:
@@ -1368,56 +1338,107 @@ def procesar_aplicacion_anticipo(xml_original, forma_pago="99", metodo_pago="PPD
             'xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"',
             'xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://www.sat.gob.mx/cfd/4 http://www.sat.gob.mx/sitio_internet/cfd/4/cfdv40.xsd"'
         )
-        print("✓ schemaLocation agregado al XML antes del parsing")
     
     xml_string = xml_string_str.encode('utf-8')
     dom = parseString(xml_string)
     
-    # Aplicar transformación a Aplicación de Anticipo
-    # IMPORTANTE: Pasar el parámetro conceptos_ya_reemplazados
+    # Aplicar transformación
     try:
         transformar_a_aplicacion_anticipo(dom, moneda_filemaker, tipo_cambio_filemaker, conceptos_ya_reemplazados)
     except Exception as e:
-        print(f"⚠ Error en transformación: {str(e)}")
+        print(f"Error en transformación: {str(e)}")
         raise
+
+    # Convertir DOM a string SIN encoding parameter
+    xml_transformado_str = dom.toxml()
     
-    # Convertir de vuelta a bytes
-    xml_transformado = dom.toxml(encoding="UTF-8")
+    # Agregar declaración XML UTF-8
+    if not xml_transformado_str.startswith('<?xml'):
+        xml_transformado_str = '<?xml version="1.0" encoding="UTF-8"?>' + xml_transformado_str
+    else:
+        xml_transformado_str = xml_transformado_str.replace(
+            '<?xml version="1.0" ?>', 
+            '<?xml version="1.0" encoding="UTF-8"?>'
+        )
     
-    # NUEVO: Agregar CfdiRelacionados ANTES del sellado si se proporciona UUID
+    # Convertir a bytes
+    xml_transformado = xml_transformado_str.encode('utf-8')
+    
+    # Agregar CfdiRelacionados ANTES del sellado
     if uuid_relacionado:
         xml_transformado = agregar_cfdi_relacionados_pre_sellado(xml_transformado, uuid_relacionado)
     
     # Generar sello
     xml_sellado = generar_sello(xml_transformado, RUTA_CER, RUTA_KEY, PASSWORD_KEY)
+
     
     log_xml_sellado()
 
     # Intentar timbrar
     xml_timbrado, msg = timbrar_con_sf(xml_sellado)
     
-    print(f"DEBUG - Resultado del timbrado:")
-    print(f"  xml_timbrado es None: {xml_timbrado is None}")
     if xml_timbrado:
         print(f"  Longitud: {len(xml_timbrado)}")
     print(f"  Mensaje: {msg}")
 
     # Si el timbrado no devuelve XML válido, retornar el XML sellado
     if xml_timbrado is None or not xml_timbrado.strip().startswith(b"<"):
-        print("⚠ ADVERTENCIA: DEVOLVIENDO XML SELLADO (NO TIMBRADO) - El timbrado fallo")
         return xml_sellado
     
-    print("✓ OK: DEVOLVIENDO XML TIMBRADO - El timbrado fue exitoso")
+    # ⭐⭐⭐ TAMBIÉN AGREGAR ESTA LÍNEA AQUÍ ⭐⭐⭐
+    xml_timbrado = corregir_encoding_xml(xml_timbrado)
 
     log_timbrado_exitoso("XML timbrado correctamente")
     return xml_timbrado
+    
+
+def corregir_encoding_xml(xml_bytes):
+    """
+    Corrige caracteres mal codificados en el XML final
+    """
+    try:
+        # Convertir a string
+        if isinstance(xml_bytes, bytes):
+            xml_str = xml_bytes.decode('utf-8')
+        else:
+            xml_str = xml_bytes
+        
+        # Reemplazar caracteres mal codificados
+        # IMPORTANTE: Usar lista de tuplas, no diccionario
+        # El orden importa - los patrones más largos primero
+        reemplazos = [
+            ('Ã³', 'ó'),
+            ('Ã±', 'ñ'),
+            ('Ã­', 'í'),
+            ('Ã¡', 'á'),
+            ('Ã©', 'é'),
+            ('Ãº', 'ú'),
+            ('Ã¼', 'ü'),
+            ('Ã', 'Ñ'),
+            ('Ã‰', 'É'),
+            ('Ã"', 'Ó'),
+            ('Ãš', 'Ú'),
+            ('Ã‡', 'Ç'),
+            ('Ã', 'Á'),
+            ('Ã', 'Í'),
+        ]
+        
+        for malo, bueno in reemplazos:
+            xml_str = xml_str.replace(malo, bueno)
+        
+        # Convertir de vuelta a bytes
+        return xml_str.encode('utf-8')
+        
+    except Exception as e:
+        print(f"⚠ Error corrigiendo encoding: {e}")
+        return xml_bytes
+
 
 def procesar_complemento_pago(xml_original, forma_pago="99"):
     """Función principal para procesar complemento de pago"""
     
     # PRIMERO extraer los valores del documento original
     valores_pago = extraer_valores_documento_original(xml_original)
-    log_debug(f"Valores a usar en complemento: {valores_pago}")
     
     # SEGUNDO extraer el UUID del documento original antes de cualquier transformación
     uuid_documento_original = None
@@ -1438,7 +1459,6 @@ def procesar_complemento_pago(xml_original, forma_pago="99"):
             for elem in tree_original.iter():
                 if elem.tag.endswith("TimbreFiscalDigital"):
                     tfd = elem
-                    print(f" TimbreFiscalDigital encontrado con tag: {elem.tag}")
                     break
         
         # Método 3: Buscar por atributo UUID directamente
@@ -1446,19 +1466,14 @@ def procesar_complemento_pago(xml_original, forma_pago="99"):
             for elem in tree_original.iter():
                 if elem.get("UUID"):
                     tfd = elem
-                    print(f" Elemento con UUID encontrado: {elem.tag}")
                     break
         
         if tfd is not None:
             uuid_documento_original = tfd.get("UUID")
-            print(f" OK: UUID extraido del documento original: {uuid_documento_original}")
         else:
-            print(" ERROR: No se encontro TimbreFiscalDigital en el documento original")
             # Mostrar todos los elementos para debug
-            print(" Elementos encontrados en el XML:")
             for elem in tree_original.iter():
                 attrs = ", ".join([f"{k}={v}" for k, v in elem.attrib.items()])
-                print(f"   - {elem.tag} {attrs}")
     except Exception as e:
         log_error_with_traceback("Error al extraer UUID del documento original", e)
     
@@ -1477,11 +1492,23 @@ def procesar_complemento_pago(xml_original, forma_pago="99"):
     xml_string = etree.tostring(tree, encoding="UTF-8", xml_declaration=True)
     dom = parseString(xml_string)
     
-    # Aplicar transformación a Complemento de Pago pasando el UUID original, forma de pago Y valores extraídos
+    # Aplicar transformación a Complemento de Pago
     transformar_a_complemento_pago(dom, uuid_documento_original, forma_pago, valores_pago)
     
-    # Convertir de vuelta a bytes
-    xml_transformado = dom.toxml(encoding="UTF-8")
+    # Convertir DOM a string SIN encoding parameter
+    xml_transformado_str = dom.toxml()
+    
+    # Agregar declaración XML UTF-8
+    if not xml_transformado_str.startswith('<?xml'):
+        xml_transformado_str = '<?xml version="1.0" encoding="UTF-8"?>' + xml_transformado_str
+    else:
+        xml_transformado_str = xml_transformado_str.replace(
+            '<?xml version="1.0" ?>', 
+            '<?xml version="1.0" encoding="UTF-8"?>'
+        )
+    
+    # Convertir a bytes
+    xml_transformado = xml_transformado_str.encode('utf-8')
     
     # Generar sello
     xml_sellado = generar_sello(xml_transformado, RUTA_CER, RUTA_KEY, PASSWORD_KEY)
@@ -1526,7 +1553,6 @@ def timbrar():
         return Response(xml_resultado, mimetype="application/xml")
 
     except Exception as e:
-        log_error_with_traceback("Error en timbrado", e)
         return Response(f"<error>{str(e)}</error>", mimetype="application/xml")
 
 # ENDPOINTS ESPECÍFICOS
@@ -1543,7 +1569,6 @@ def timbrar_complemento_pago():
         faltantes = detectar_datos_faltantes(xml_original)
         if faltantes:
             # Crear mensaje detallado de datos faltantes
-            print(f"XML rechazado: {len(faltantes)} errores encontrados")
             mensaje_faltantes = "El XML tiene datos faltantes o incompletos:\n"
             for faltante in faltantes[:5]:  # Mostrar máximo 5 para no saturar
                 tipo_error = "plantilla sin completar" if faltante['tipo'] == 'plantilla' else "campo obligatorio vacío"
@@ -1584,7 +1609,6 @@ def timbrar_aplicacion_anticipo():
             xml_archivo1.seek(0)  # Resetear para uso posterior
             faltantes1 = detectar_datos_faltantes(xml1_bytes)
             if faltantes1:
-                print(f"Primer XML rechazado: {len(faltantes1)} errores")
                 mensaje_faltantes = f"El primer XML tiene datos faltantes:\n"
                 for faltante in faltantes1[:3]:
                     mensaje_faltantes += f"- {faltante['elemento']}.{faltante['atributo']}: {faltante['valor_actual']}\n"
@@ -1599,7 +1623,6 @@ def timbrar_aplicacion_anticipo():
             xml_archivo2.seek(0)  # Resetear para uso posterior
             faltantes2 = detectar_datos_faltantes(xml2_bytes)
             if faltantes2:
-                print(f"Segundo XML rechazado: {len(faltantes2)} errores")
                 mensaje_faltantes = f"El segundo XML tiene datos faltantes:\n"
                 for faltante in faltantes2[:3]:
                     mensaje_faltantes += f"- {faltante['elemento']}.{faltante['atributo']}: {faltante['valor_actual']}\n"
@@ -1637,9 +1660,6 @@ def timbrar_aplicacion_anticipo():
             archivo1_es_filemaker = es_archivo_filemaker(xml_archivo1_bytes)
             archivo2_es_filemaker = es_archivo_filemaker(xml_archivo2_bytes)
             
-            print(f"DEBUG: Archivo 1 - CFDI: {archivo1_es_cfdi}, FileMaker: {archivo1_es_filemaker}")
-            print(f"DEBUG: Archivo 2 - CFDI: {archivo2_es_cfdi}, FileMaker: {archivo2_es_filemaker}")
-            
             # Determinar cuál XML usar para cada propósito
             xml_cfdi_timbrado = None
             xml_para_aplicacion = None
@@ -1650,13 +1670,11 @@ def timbrar_aplicacion_anticipo():
                 xml_cfdi_timbrado = xml_archivo1_bytes
                 xml_para_aplicacion = xml_archivo1_bytes  # Usar el mismo CFDI como base
                 uuid_extraido = extraer_uuid_de_xml(xml_archivo1_bytes)
-                print(f"OK: Usando archivo 1 como CFDI base (archivo 2 no es CFDI válido)")
             elif archivo2_es_cfdi and not archivo1_es_cfdi:
                 # Archivo 2 es CFDI, archivo 1 no es CFDI válido
                 xml_cfdi_timbrado = xml_archivo2_bytes
                 xml_para_aplicacion = xml_archivo2_bytes  # Usar el mismo CFDI como base
                 uuid_extraido = extraer_uuid_de_xml(xml_archivo2_bytes)
-                print(f"OK: Usando archivo 2 como CFDI base (archivo 1 no es CFDI válido)")
             elif archivo1_es_cfdi and archivo2_es_cfdi:
                 # Ambos son CFDI - usar el que tiene UUID
                 uuid_archivo1 = extraer_uuid_de_xml(xml_archivo1_bytes)
@@ -1666,18 +1684,15 @@ def timbrar_aplicacion_anticipo():
                     xml_cfdi_timbrado = xml_archivo1_bytes
                     xml_para_aplicacion = xml_archivo2_bytes
                     uuid_extraido = uuid_archivo1
-                    print(f"OK: Archivo 1 tiene UUID, usando archivo 2 para aplicación")
                 elif uuid_archivo2 and not uuid_archivo1:
                     xml_cfdi_timbrado = xml_archivo2_bytes
                     xml_para_aplicacion = xml_archivo1_bytes
                     uuid_extraido = uuid_archivo2
-                    print(f"OK: Archivo 2 tiene UUID, usando archivo 1 para aplicación")
                 else:
                     # Ambos tienen UUID o ninguno tiene - usar el primero como base
                     xml_cfdi_timbrado = xml_archivo1_bytes
                     xml_para_aplicacion = xml_archivo1_bytes
                     uuid_extraido = uuid_archivo1 if uuid_archivo1 else uuid_archivo2
-                    print(f"OK: Usando archivo 1 como base (ambos son CFDI)")
             else:
                 # Ninguno es CFDI válido
                 return jsonify({"error": "Ninguno de los archivos es un CFDI válido. Se requiere al menos un XML de CFDI.", "success": False})
@@ -1685,19 +1700,16 @@ def timbrar_aplicacion_anticipo():
             if not uuid_extraido:
                 return jsonify({"error": "No se encontró UUID en ninguno de los archivos CFDI. Se requiere un CFDI timbrado.", "success": False})
             
-            print(f"OK: UUID extraido: {uuid_extraido}")
             
             # PASO 2: No crear CfdiRelacionados antes del timbrado (causa errores)
             # El UUID se agregará después del timbrado exitoso
             xml_aplicacion_modificado = xml_para_aplicacion
             
-            print(f"OK: XML preparado para aplicacion de anticipo con UUID relacionado")
             
             # PASO 3: Determinar método y forma de pago para aplicación de anticipo
             metodo_pago = "PPD"  # Pago diferido
             forma_pago = "99"    # Por definir (obligatorio para PPD)
             
-            print(f"OK: Usando MetodoPago='{metodo_pago}' y FormaPago='{forma_pago}' para aplicacion de anticipo")
             
             # PASO 4: Extraer conceptos y moneda del FileMaker antes del procesamiento
             conceptos_filemaker = None
@@ -1707,13 +1719,9 @@ def timbrar_aplicacion_anticipo():
             if archivo1_es_filemaker:
                 conceptos_filemaker = extraer_conceptos_filemaker(xml_archivo1_bytes)
                 moneda_filemaker, tipo_cambio_filemaker = extraer_moneda_filemaker(xml_archivo1_bytes)
-                print(f"✓ Conceptos FileMaker extraídos para procesamiento: {len(conceptos_filemaker)}")
-                print(f"✓ Moneda FileMaker: {moneda_filemaker}, Tipo cambio: {tipo_cambio_filemaker}")
             elif archivo2_es_filemaker:
                 conceptos_filemaker = extraer_conceptos_filemaker(xml_archivo2_bytes)
                 moneda_filemaker, tipo_cambio_filemaker = extraer_moneda_filemaker(xml_archivo2_bytes)
-                print(f"✓ Conceptos FileMaker extraídos para procesamiento: {len(conceptos_filemaker)}")
-                print(f"✓ Moneda FileMaker: {moneda_filemaker}, Tipo cambio: {tipo_cambio_filemaker}")
             
             # PASO 5: Procesar y timbrar el XML de aplicación de anticipo
             xml_filemaker_bytes = xml_archivo1_bytes if archivo1_es_filemaker else xml_archivo2_bytes
@@ -1736,7 +1744,6 @@ def timbrar_aplicacion_anticipo():
             # VALIDAR DATOS FALTANTES
             faltantes = detectar_datos_faltantes(xml_original)
             if faltantes:
-                print(f"XML rechazado: {len(faltantes)} errores encontrados")
                 mensaje_faltantes = "El XML tiene datos faltantes o incompletos:\n"
                 for faltante in faltantes[:5]:
                     mensaje_faltantes += f"- {faltante['elemento']}.{faltante['atributo']}: {faltante['valor_actual']}\n"
@@ -1760,7 +1767,6 @@ def timbrar_aplicacion_anticipo():
             return jsonify(respuesta)
 
     except Exception as e:
-        log_error_with_traceback("Error en timbrado de aplicación de anticipo", e)
         return jsonify({"error": str(e), "success": False})
 
 # FUNCIONES DE VALIDACIÓN
@@ -1798,7 +1804,6 @@ def detectar_datos_faltantes(xml_bytes):
                     })
         
         if faltantes:
-            print(f"DATOS FALTANTES DETECTADOS: {len(faltantes)} errores")
             for f in faltantes[:3]:  # Solo mostrar primeros 3
                 tipo_msg = "plantilla" if f['tipo'] == 'plantilla' else "campo vacío"
                 print(f"   • {f['elemento']}.{f['atributo']}: {tipo_msg}")
