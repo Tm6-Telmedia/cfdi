@@ -1413,7 +1413,6 @@ def procesar_aplicacion_anticipo(xml_original, forma_pago="99", metodo_pago="PPD
     if xml_timbrado is None or not xml_timbrado.strip().startswith(b"<"):
         return xml_sellado
     
-    # ⭐⭐⭐ TAMBIÉN AGREGAR ESTA LÍNEA AQUÍ ⭐⭐⭐
     xml_timbrado = corregir_encoding_xml(xml_timbrado)
 
     log_timbrado_exitoso("XML timbrado correctamente")
@@ -1731,11 +1730,9 @@ def timbrar_aplicacion_anticipo():
             # El UUID se agregará después del timbrado exitoso
             xml_aplicacion_modificado = xml_para_aplicacion
             
-            
             # PASO 3: Determinar método y forma de pago para aplicación de anticipo
             metodo_pago = "PPD"  # Pago diferido
             forma_pago = "99"    # Por definir (obligatorio para PPD)
-            
             
             # PASO 4: Extraer conceptos y moneda del FileMaker antes del procesamiento
             conceptos_filemaker = None
@@ -1783,7 +1780,7 @@ def timbrar_aplicacion_anticipo():
                 })
             
             # Obtener forma de pago del formulario
-            forma_pago = request.form.get("forma_pago", "99")  # Default: Por definir
+            forma_pago = request.form.get("forma_pago", "99")  # Default: Por definir   
             
             xml_resultado = procesar_aplicacion_anticipo(xml_original, forma_pago, "PPD", None, None)
             
