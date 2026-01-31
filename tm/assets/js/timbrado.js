@@ -461,6 +461,32 @@ function enviarParaTimbrar(xmlDom){
             mensajes.push("XML descargado");
         }
 
+        // Descargar el XML timbrado
+        if (data.xml_timbrado) {
+            const xmlBase64 = data.xml_timbrado;
+
+            // Decodificar base64 → bytes
+            const binaryString = atob(xmlBase64);
+            const len = binaryString.length;
+            const bytes = new Uint8Array(len);
+
+            for (let i = 0; i < len; i++) {
+                bytes[i] = binaryString.charCodeAt(i);
+            }
+
+            const xmlBlob = new Blob([bytes], { type: "text/xml;charset=utf-8;" });
+            const xmlUrl = URL.createObjectURL(xmlBlob);
+
+            const xmlLink = document.createElement("a");
+            xmlLink.href = xmlUrl;
+            xmlLink.download = `CFDI_${tipoSeleccionado}_Timbrado.xml`;
+            document.body.appendChild(xmlLink);
+            xmlLink.click();
+            document.body.removeChild(xmlLink);
+
+            URL.revokeObjectURL(xmlUrl);
+        }
+
         // Descargar el PDF si existe
         if(data.pdf) {
             const pdfBytes = atob(data.pdf);
