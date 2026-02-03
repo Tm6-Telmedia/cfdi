@@ -375,9 +375,3 @@ def generar_cadena_original_simplificada(xml_element) -> str:
     
     return cadena
 
-
-
-#realizar operaciones
-#crear xml con los nuevos valores calculados
-
-

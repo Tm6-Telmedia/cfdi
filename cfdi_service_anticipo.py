@@ -109,7 +109,7 @@ def crear_cfdi_desde_contexto(contexto: dict, certificado_path: str, key_path: s
     
     # Crear el XML del CFDI
     xml_sin_sellar = generar_xml_cfdi(factura, uuid_origen, no_certificado, certificado_base64)
-    print(f"xml_sinSellar: {xml_sin_sellar}")
+    # print(f"xml_sinSellar: {xml_sin_sellar}")
     
     # Sellar el CFDI
     xml_sellado = sellar_cfdi(xml_sin_sellar, llave_privada,certificado_base64, xslt_path)
