@@ -379,6 +379,91 @@ function procesarDatosFaltantes(xml) {
     document.getElementById("faltantesSection").classList.remove("hidden");
 }
 
+
+
+function validarFolio(folio) {
+    folio.trim();
+    if ( folio === '') {
+        alert('El folio no puede tener espacios en blanco');
+        if (folio.length < 4 || folio.length > 4 ) {
+            alert('El folio debe ser de 4 digitos')
+        } 
+        return
+    }
+}
+
+function validarEntradasXML(xmlDom) {
+    //el archivo es un htmlDom
+    const reader = new FileReader();
+
+    reader.onload = function (e) {
+        // convertir string XML
+        const xmlString = e.target.result;
+        //Crear Dom xml
+        const parser = new DOMParser();
+        const xmlDoc = parser.parseFromString(xmlString, "text/xml");
+        
+        // IMPORTANTE: Guardar el XML parseado en xmlOriginal
+        xmlOriginal = xmlDoc;
+
+        //leer etiquetas
+        const comprobante = xmlDoc.getElementsByTagName("cfdi:Comprobante")[0];
+        const traslados = xmlDoc.getElementsByTagName("cfdi:Traslado")[0];
+
+        const folio = comprobante.getAttribute("Folio") || "";
+
+        const base = traslados.getAttribute("Base") || "";
+        const importe = traslados.getAttribute("Importe") || "";
+
+        const section = document.querySelector('#xmlUnicoSection');
+
+        const lbFolio = document.createElement('label')
+        lbFolio.textContent = 'Folio:'
+        const entradaFolio = document.createElement('input');
+        entradaFolio.classList.add('entradas');
+        entradaFolio.type = 'text';
+        entradaFolio.value = folio;
+        section.appendChild(lbFolio)
+        section.appendChild(entradaFolio);
+        
+        
+        // Actualizar Folio cuando cambie
+        entradaFolio.addEventListener('input', () => {
+            comprobante.setAttribute("Folio", entradaFolio.value);
+        });
+
+        const lbBase = document.createElement('label')
+        lbBase.textContent = 'Base:'
+        const entradaBase = document.createElement('input');
+        entradaBase.classList.add('entradas');
+        entradaBase.type = 'text';
+        entradaBase.value = base;
+        // entradaBase.placeholder = 'Base';
+        section.appendChild(lbBase)
+        section.appendChild(entradaBase);
+
+        entradaBase.addEventListener('input', () => {
+            traslados.setAttribute("Base", entradaBase.value);
+        });
+
+        const lbImporte = document.createElement('label')
+        lbImporte.textContent = 'Importe:'
+        const entradaImporte = document.createElement('input');
+        entradaImporte.classList.add('entradas');
+        entradaImporte.type = 'text';
+        entradaImporte.value = importe;
+        // entradaImporte.placeholder = 'Importe';
+        section.appendChild(lbImporte)
+        section.appendChild(entradaImporte);
+
+        entradaImporte.addEventListener('input', () => {
+            traslados.setAttribute("Importe", entradaImporte.value);
+        });
+    }
+    reader.readAsText(xmlDom)
+}
+
+
 // --- ENVIAR PARA TIMBRAR ---
 function enviarParaTimbrar(xmlDom){
     const tipoSeleccionado = document.getElementById("tipoTimbrado").value;
@@ -424,7 +509,7 @@ function enviarParaTimbrar(xmlDom){
     let endpoint;
     if (tipoSeleccionado === "complemento") {
     // tm7.telmedia.com.mx
-        endpoint = "https://127.0.0.1:5000/timbrar-complemento-pago"; 
+        endpoint = "https://127.0.0.1:5000/timbrar-complemento-pago2"; 
     } else if (tipoSeleccionado === "anticipo") {
         endpoint = "https://127.0.0.1:5000/timbrar-aplicacion-anticipo";
     } else {
@@ -522,84 +607,3 @@ function enviarParaTimbrar(xmlDom){
     });
 }
 
-function validarFolio(folio) {
-    folio.trim();
-    if ( folio === '') {
-        alert('El folio no puede tener espacios en blanco');
-        if (folio.length < 4 || folio.length > 4 ) {
-            alert('El folio debe ser de 4 digitos')
-        } 
-        return
-    }
-}
-
-function validarEntradasXML(xmlDom) {
-    //el archivo es un htmlDom
-    const reader = new FileReader();
-
-    reader.onload = function (e) {
-        // convertir string XML
-        const xmlString = e.target.result;
-        //Crear Dom xml
-        const parser = new DOMParser();
-        const xmlDoc = parser.parseFromString(xmlString, "text/xml");
-        
-        // IMPORTANTE: Guardar el XML parseado en xmlOriginal
-        xmlOriginal = xmlDoc;
-
-        //leer etiquetas
-        const comprobante = xmlDoc.getElementsByTagName("cfdi:Comprobante")[0];
-        const traslados = xmlDoc.getElementsByTagName("cfdi:Traslado")[0];
-
-        const folio = comprobante.getAttribute("Folio") || "";
-
-        const base = traslados.getAttribute("Base") || "";
-        const importe = traslados.getAttribute("Importe") || "";
-
-        const section = document.querySelector('#xmlUnicoSection');
-
-        const lbFolio = document.createElement('label')
-        lbFolio.textContent = 'Folio:'
-        const entradaFolio = document.createElement('input');
-        entradaFolio.classList.add('entradas');
-        entradaFolio.type = 'text';
-        entradaFolio.value = folio;
-        section.appendChild(lbFolio)
-        section.appendChild(entradaFolio);
-        
-        
-        // Actualizar Folio cuando cambie
-        entradaFolio.addEventListener('input', () => {
-            comprobante.setAttribute("Folio", entradaFolio.value);
-        });
-
-        const lbBase = document.createElement('label')
-        lbBase.textContent = 'Base:'
-        const entradaBase = document.createElement('input');
-        entradaBase.classList.add('entradas');
-        entradaBase.type = 'text';
-        entradaBase.value = base;
-        // entradaBase.placeholder = 'Base';
-        section.appendChild(lbBase)
-        section.appendChild(entradaBase);
-
-        entradaBase.addEventListener('input', () => {
-            traslados.setAttribute("Base", entradaBase.value);
-        });
-
-        const lbImporte = document.createElement('label')
-        lbImporte.textContent = 'Importe:'
-        const entradaImporte = document.createElement('input');
-        entradaImporte.classList.add('entradas');
-        entradaImporte.type = 'text';
-        entradaImporte.value = importe;
-        // entradaImporte.placeholder = 'Importe';
-        section.appendChild(lbImporte)
-        section.appendChild(entradaImporte);
-
-        entradaImporte.addEventListener('input', () => {
-            traslados.setAttribute("Importe", entradaImporte.value);
-        });
-    }
-    reader.readAsText(xmlDom)
-}

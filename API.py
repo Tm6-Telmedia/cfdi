@@ -39,6 +39,22 @@ from cfdi_service_anticipo import (
     generar_xml_timbrado
 )
 
+from cfdi_service_complemento import (
+    parse_xml_complemento,
+    crear_cfdi_complemento,
+    cargar_llave_privada,
+    sellar_cfdi,
+    cargar_certificado
+    # timbrar_con_pac
+)
+
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+RUTA_CER = os.path.join(BASE_DIR, "CSD_Sucursal_1_EKU9003173C9_20230517_223850.cer")
+RUTA_KEY = os.path.join(BASE_DIR, "CSD_Sucursal_1_EKU9003173C9_20230517_223850.key")
+PASSWORD_KEY = b"12345678a"  
+
+RUTA_XSLT = r"xslt\cadenaoriginal_4_0.xslt"
+
 # Constantes globales
 FILEMAKER_NAMESPACE = "http://www.filemaker.com/fmpdsoresult"
 
@@ -260,29 +276,35 @@ def timbrar_con_sf(xml_bytes):
         
         result = client.service.timbrar(usuario, contrasena, xml_b64, False)
         
+        print(f"RESPUESTA DEL PAC - Status: {result.status}")
+
         if result.status != 200:
             mensaje = getattr(result, 'mensaje', 'Error desconocido en el timbrado')
+            print(f"ERROR DEL PAC: {mensaje}")
             return None, mensaje
         
         # DEBUG: Verificar qué contiene result
-        # print(f"DEBUG - Atributos de result: {dir(result)}")
-        # print(f"DEBUG - Tiene resultados: {hasattr(result, 'resultados')}")
+        print(f"DEBUG - Atributos de result: {dir(result)}")
+        print(f"DEBUG - Tiene resultados: {hasattr(result, 'resultados')}")
         
         # Verificar que resultados existe y tiene elementos
         if not hasattr(result, 'resultados') or not result.resultados or len(result.resultados) == 0:
             print("DEBUG - No hay resultados en la respuesta del PAC")
             return None, "No se recibieron resultados del PAC"
         
+        print(f"DEBUG - Número de resultados: {len(result.resultados)}")
         primer_resultado = result.resultados[0]
+        print(f"DEBUG - Atributos del primer resultado: {dir(primer_resultado)}")
         
         cfdi = primer_resultado.cfdiTimbrado
-        # if cfdi:
-        #     print(f"DEBUG - Tipo de cfdi: {type(cfdi)}")
-        #     print(f"DEBUG - Longitud de cfdi: {len(cfdi) if hasattr(cfdi, '__len__') else 'N/A'}")
+        if cfdi:
+            print(f"DEBUG - Tipo de cfdi: {type(cfdi)}")
+            print(f"DEBUG - Longitud de cfdi: {len(cfdi) if hasattr(cfdi, '__len__') else 'N/A'}")
         
         # Verificar que cfdi no sea None
         if cfdi is None:
             if hasattr(primer_resultado, 'mensaje'):
+                print(f"DEBUG - Mensaje del resultado: {primer_resultado.mensaje}")
                 return None, f"El PAC retornó vacío: {primer_resultado.mensaje}"
             return None, "El PAC retornó un CFDI vacío"
         
@@ -813,47 +835,104 @@ def detectar_datos_faltantes(xml_bytes):
         print(f"ERROR en validación: {e}")
         return []
 
+@app.route("/timbrar-complemento-pago2", methods=["POST"])
+def timbrar_complemento_pago2():
+    try:
+        #Recibir
+        xml_complemento = request.files.get("xml")
+        #  Leer XMLs
+        xml_cfdi_string = xml_complemento.read().decode("utf-8")
+        forma_pago = request.form.get("forma_pago")
+
+        # extraer valores del xml a un dict
+        factura = parse_xml_complemento(xml_cfdi_string,forma_pago)
+        llave_privada = cargar_llave_privada(RUTA_KEY, PASSWORD_KEY)
+
+        # Cargar certificado y llave privada
+        certificado_base64, no_certificado = cargar_certificado(RUTA_CER)
+
+        xml_sin_sellar = crear_cfdi_complemento(factura, no_certificado, certificado_base64)
+
+        xml_sellado = sellar_cfdi(xml_sin_sellar,llave_privada, RUTA_XSLT)
+
+        #transformar xml en stringa bytes
+        xml_bytes = xml_sellado.encode("utf-8")
+        guardar_xml(xml_bytes, tipo_comprobante="anticipo")
+
+        #timbrar con pac
+        xml_timbrado = timbrar_con_pac(xml_bytes) #bytes solo  es cfdi - listo
+
+        respuesta = generar_xml_timbrado(xml_timbrado)
+
+        # print(respuesta["xml"]) importante para generar xml
+        xml_base64 = base64.b64encode(respuesta["xml"].encode('utf-8')).decode('utf-8')
+
+        # if tipo == "aplicacion":
+        # Leer contenido como bytes
+        # xml_anticipo_bytes = xml_anticipo.read()
+        # xml_filemaker_bytes = xml_filemaker.read()
+        
+        xml_timbrado_str = respuesta["xml"]
+        xml_timbrado_bytes = xml_timbrado_str.encode('utf-8')   
+
+
+        # Generar respuesta dual (XML + PDF)
+        respuesta = generar_respuesta_dual(xml_timbrado_bytes, "P")
+
+        return jsonify({
+            "success": True,
+            "xml_timbrado": xml_base64,  #  está en base64 para la descarga
+            "pdf": respuesta["pdf"],
+            # "pdf_filename": f"CFDI_Aplicacion_Anticipo.pdf"
+            "pdf_filename": respuesta["pdf_filename"]
+        })
+
+        # print(f"antes de bytes: {xml_sellado}")
+        # print(f"desde complemento: {xml_timbrado}")
+    
+    except Exception as e:
+        return jsonify({"success": False, "error": str(e)}), 500
 
 # ENDPOINTS ESPECÍFICOS
-@app.route("/timbrar-complemento-pago", methods=["POST"])
-def timbrar_complemento_pago():
-    try:
-        xml_file = request.files.get("xml")
-        if not xml_file:
-            return jsonify({"error": "No se recibió el archivo XML", "success": False})
+# @app.route("/timbrar-complemento-pago", methods=["POST"])
+# def timbrar_complemento_pago():
+#     try:
+#         xml_file = request.files.get("xml")
+#         if not xml_file:
+#             return jsonify({"error": "No se recibió el archivo XML", "success": False})
 
-        xml_original = xml_file.read()
+#         xml_original = xml_file.read()
         
-        # VALIDAR DATOS FALTANTES
-        faltantes = detectar_datos_faltantes(xml_original)
-        if faltantes:
-            # Crear mensaje detallado de datos faltantes
-            mensaje_faltantes = "El XML tiene datos faltantes o incompletos:\n"
-            for faltante in faltantes[:5]:  # Mostrar máximo 5 para no saturar
-                tipo_error = "plantilla sin completar" if faltante['tipo'] == 'plantilla' else "campo obligatorio vacío"
-                mensaje_faltantes += f"- {faltante['elemento']}.{faltante['atributo']}: {tipo_error} ('{faltante['valor_actual']}')\n"
-            if len(faltantes) > 5:
-                mensaje_faltantes += f"... y {len(faltantes) - 5} más."
+#         # VALIDAR DATOS FALTANTES
+#         faltantes = detectar_datos_faltantes(xml_original)
+#         if faltantes:
+#             # Crear mensaje detallado de datos faltantes
+#             mensaje_faltantes = "El XML tiene datos faltantes o incompletos:\n"
+#             for faltante in faltantes[:5]:  # Mostrar máximo 5 para no saturar
+#                 tipo_error = "plantilla sin completar" if faltante['tipo'] == 'plantilla' else "campo obligatorio vacío"
+#                 mensaje_faltantes += f"- {faltante['elemento']}.{faltante['atributo']}: {tipo_error} ('{faltante['valor_actual']}')\n"
+#             if len(faltantes) > 5:
+#                 mensaje_faltantes += f"... y {len(faltantes) - 5} más."
             
-            return jsonify({
-                "error": mensaje_faltantes,
-                "success": False,
-                "datos_faltantes": faltantes
-            })
+#             return jsonify({
+#                 "error": mensaje_faltantes,
+#                 "success": False,
+#                 "datos_faltantes": faltantes
+#             })
         
-        # Obtener forma de pago del formulario
-        forma_pago = request.form.get("forma_pago", "99")  # Default: Por definir
+#         # Obtener forma de pago del formulario
+#         forma_pago = request.form.get("forma_pago", "99")  # Default: Por definir
         
-        xml_resultado = procesar_complemento_pago(xml_original, forma_pago)
+#         xml_resultado = procesar_complemento_pago(xml_original, forma_pago)
         
-        # Generar respuesta dual (XML + PDF)
-        respuesta = generar_respuesta_dual(xml_resultado, "P")
+#         # Generar respuesta dual (XML + PDF)
+#         respuesta = generar_respuesta_dual(xml_resultado, "P")
         
-        return jsonify(respuesta)
+#         return jsonify(respuesta)
 
-    except Exception as e:
-        log_error_with_traceback("Error en timbrado de complemento", e)
-        return jsonify({"error": str(e), "success": False})
+#     except Exception as e:
+#         log_error_with_traceback("Error en timbrado de complemento", e)
+#         return jsonify({"error": str(e), "success": False})
 
 
 # FUNCIONES DE VALIDACIÓN
@@ -929,6 +1008,7 @@ def timbrar_aplicacion_anticipo():
         
         #parsear XML FileMaker
         factura = parse_filemaker_xml(xml_filemaker_string)
+        print(factura)
 
         contexto = {
             "uuid_origen": uuid_origen,
@@ -943,6 +1023,7 @@ def timbrar_aplicacion_anticipo():
             password=PASSWORD_KEY,
             xslt_path=RUTA_XSLT
         )
+        # print(xml_cfdi)
 
         #transformar xml en stringa bytes
         xml_bytes = xml_cfdi.encode("utf-8")
@@ -976,8 +1057,7 @@ def timbrar_aplicacion_anticipo():
 
         return jsonify({
             "success": True,
-            # "xml": xml_base64,
-            "xml_timbrado": xml_base64,  # Ahora está en base64
+            "xml_timbrado": xml_base64,  #  está en base64 para la descarga
             "pdf": pdf_base64,
             "pdf_filename": f"CFDI_Aplicacion_Anticipo.pdf"
         })
