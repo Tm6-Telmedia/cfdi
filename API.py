@@ -3,21 +3,24 @@ DEPENDENCIAS QUE REQUIEREN INSTALACIÓN:
 pip install Flask==3.0.0 flask-cors==4.0.0 lxml==5.1.0 zeep==4.2.1 cryptography==41.0.7
 """
 
-from flask import Flask, request, jsonify, Response
-from lxml import etree
+from flask import Flask, request, jsonify
+# from lxml import etree
+import xml.etree.ElementTree as ET
 import base64
 from datetime import datetime
-from zeep import Client
-from cryptography.hazmat.primitives import serialization, hashes
-from cryptography.hazmat.primitives.asymmetric import padding
-from cryptography.hazmat.backends import default_backend
-from cryptography import x509
+# from zeep import Client
+# from cryptography.hazmat.primitives import serialization, hashes
+# from cryptography.hazmat.primitives.asymmetric import padding
+# from cryptography.hazmat.backends import default_backend
+# from cryptography import x509
 import os
 from flask_cors import CORS
-from xml.dom.minidom import parseString
+# from xml.dom.minidom import parseString
 from decimal import Decimal
-from typing import List, Optional
+# from typing import List, Optional
 import ssl
+
+
 app = Flask(__name__)
 CORS(app)
 # Crear un contexto SSL
@@ -31,20 +34,15 @@ from PDF import (
     ConceptoCFDI, extraer_conceptos_filemaker
 )
 
-from cfdi_service_anticipo import (
-    extraer_uuid_cfdi,
-    parse_filemaker_xml,
-    crear_cfdi_desde_contexto,
-    timbrar_con_pac,
-    generar_xml_timbrado
-)
 
-from cfdi_service_complemento import (
-    parse_xml_complemento,
-    crear_cfdi_complemento,
+from cfdi_service import (
+    cargar_certificado,
     cargar_llave_privada,
-    sellar_cfdi,
-    cargar_certificado
+    timbrar_con_pac,
+    generar_xml_timbrado,
+    sellar_cfdi_complemento,
+    generar_xml_cfdi,
+    sellar_cfdi
 )
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
@@ -156,6 +154,7 @@ def timbrar_complemento_pago2():
         xml_cfdi_string = xml_complemento.read().decode("utf-8")
         forma_pago = request.form.get("forma_pago")
 
+        # print(xml_cfdi_string)
         # extraer valores del xml a un dict
         factura = parse_xml_complemento(xml_cfdi_string,forma_pago)
         llave_privada = cargar_llave_privada(RUTA_KEY, PASSWORD_KEY)
@@ -165,7 +164,7 @@ def timbrar_complemento_pago2():
 
         xml_sin_sellar = crear_cfdi_complemento(factura, no_certificado, certificado_base64)
 
-        xml_sellado = sellar_cfdi(xml_sin_sellar,llave_privada, RUTA_XSLT)
+        xml_sellado = sellar_cfdi_complemento(xml_sin_sellar,llave_privada, RUTA_XSLT)
 
         #transformar xml en stringa bytes
         xml_bytes = xml_sellado.encode("utf-8")
@@ -205,6 +204,259 @@ def timbrar_complemento_pago2():
     except Exception as e:
         return jsonify({"success": False, "error": str(e)}), 500
     
+
+#extraer valores emisor, receptor para crear dict
+def parse_xml_complemento(xml_cfdi: str, forma_pago: str) -> dict:
+    ns = {
+        "cfdi": "http://www.sat.gob.mx/cfd/4",
+        "tfd": "http://www.sat.gob.mx/TimbreFiscalDigital"
+    }
+
+    root = ET.fromstring(xml_cfdi)
+
+    # Extraer datos del nodo Comprobante
+    comprobante = root.attrib
+    emisor = root.find('cfdi:Emisor', ns).attrib
+    receptor = root.find('cfdi:Receptor', ns).attrib 
+    timbre = root.find('.//tfd:TimbreFiscalDigital', ns).attrib
+    
+    # Extraer Impuestos
+    impuestos_nodo = root.find('cfdi:Impuestos', ns)
+    traslados = impuestos_nodo.find('cfdi:Traslados', ns)
+    traslado = traslados.find('cfdi:Traslado', ns).attrib
+    
+    # Extraer Concepto
+    conceptos_nodo = root.find('cfdi:Conceptos', ns)
+    concepto = conceptos_nodo.find('cfdi:Concepto', ns).attrib
+    
+    # UUID de la factura original
+    uuid_factura = timbre['UUID']
+    
+    # Valores de la factura original - Nodo: Comprobante
+    version_factura = comprobante.get('Version')
+    total_factura = float(comprobante['Total'])
+    subtotal_factura = float(comprobante['SubTotal'])
+    serie_factura = comprobante.get('Serie', '')
+    folio_factura = comprobante.get('Folio', '')
+    exportacion_factura = comprobante.get('Exportacion')
+    lugar_expedicion = comprobante.get('LugarExpedicion')  
+    metodo_pago_original = comprobante.get('MetodoPago')
+    moneda_original = comprobante.get('Moneda')
+    fecha_factura = comprobante.get('Fecha')
+    
+    # Certificado (para el complemento de pago)
+    certificado = comprobante.get('Certificado')
+    no_certificado = comprobante.get('NoCertificado')
+    
+    # Fecha actual 
+    # fecha_actual = datetime.now().strftime('%Y-%m-%dT%H:%M:%S')
+    # fecha_actual = "2026-01-08T13:12:50"
+
+
+    
+    # Calcular valores del pago (asumiendo pago total)
+    monto_pago = total_factura
+    imp_saldo_ant = total_factura
+    imp_pagado = monto_pago
+    imp_saldo_insoluto = imp_saldo_ant - imp_pagado
+    
+    # Calcular impuestos proporcionales
+    base_dr = float(traslado['Base'])
+    tasa_dr = traslado['TasaOCuota']
+    importe_dr = float(traslado['Importe'])
+    impuesto_tipo = traslado['Impuesto']
+    tipo_factor = traslado['TipoFactor']
+    
+    # Construir el diccionario del complemento de pago
+    complemento_pago_dict = {
+        'Comprobante': {
+            'Version': '4.0',
+            'Serie': 'P',  # Puedes parametrizar esto
+            'Folio': folio_factura,  # Asigna tu número de folio
+            'Fecha': fecha_factura,
+            'SubTotal': '0',
+            'Moneda': 'XXX',  #  Siempre xxx en complementos de pago
+            'Total': '0',
+            'TipoDeComprobante': 'P',
+            'Exportacion': exportacion_factura,
+            'LugarExpedicion': lugar_expedicion
+            # 'NoCertificado': no_certificado,
+            # 'Certificado': certificado,
+            # 'Sello': ''  # Se genera antes de enviar al PAC
+        },
+        
+        'Emisor': {
+            'Rfc': emisor.get('Rfc'),
+            'Nombre': emisor.get('Nombre'),
+            'RegimenFiscal': emisor.get('RegimenFiscal')
+        },
+        
+        'Receptor': {
+            'Rfc': receptor.get('Rfc'),
+            'Nombre': receptor.get('Nombre'),
+            'DomicilioFiscalReceptor': receptor.get('DomicilioFiscalReceptor'),
+            'RegimenFiscalReceptor': receptor.get('RegimenFiscalReceptor'),
+            'UsoCFDI': 'CP01'  #  Siempre CP01 para complementos de pago
+        },
+        
+        'Conceptos': {
+            'Concepto': {
+                'ClaveProdServ': '84111506',  #  Siempre este código
+                'Cantidad': '1',
+                'ClaveUnidad': 'ACT',
+                'Descripcion': 'Pago',
+                'ValorUnitario': '0',  #  Siempre 0
+                'Importe': '0',  #  Siempre 0
+                'ObjetoImp': '01'  #  Siempre 01
+            }
+        },
+        
+        'Complemento': {
+            'Pagos': {
+                'Version': '2.0',
+                
+                'Totales': {
+                    'MontoTotalPagos': f'{monto_pago:.2f}',
+                    'TotalTrasladosBaseIVA16': f'{base_dr:.2f}',
+                    'TotalTrasladosImpuestoIVA16': f'{importe_dr:.2f}'
+                },
+                
+                'Pago': {
+                    'FechaPago': fecha_factura,
+                    'FormaDePagoP': forma_pago,  # aqui va la seleccion pasada como argumento
+                    'MonedaP': moneda_original,
+                    'TipoCambioP': '1',
+                    'Monto': f'{monto_pago:.2f}',
+
+                    'ImpuestosP': {
+                        'TrasladosP': [
+                            {
+                                'BaseP': f'{base_dr:.2f}',
+                                'ImpuestoP': impuesto_tipo,
+                                'TipoFactorP': tipo_factor,
+                                'TasaOCuotaP': f'{float(tasa_dr):.6f}',
+                                'ImporteP': f'{importe_dr:.2f}'
+                            }
+                        ]
+                    },
+                    
+                    'DoctoRelacionado': {
+                        'IdDocumento': uuid_factura,
+                        'Serie': serie_factura,
+                        'Folio': folio_factura,
+                        'MonedaDR': moneda_original,
+                        'EquivalenciaDR': '1',
+                        'NumParcialidad': '1',
+                        'ImpSaldoAnt': f'{imp_saldo_ant:.2f}',
+                        'ImpPagado': f'{imp_pagado:.2f}',
+                        'ImpSaldoInsoluto': f'{imp_saldo_insoluto:.2f}',
+                        'ObjetoImpDR': '02',
+                        # 'MetodoDePagoDR': metodo_pago_original,
+                        'ImpuestosDR': {
+                            'TrasladosDR': [
+                                {
+                                    'BaseDR': f'{base_dr:.2f}',
+                                    'ImpuestoDR': impuesto_tipo,
+                                    'TipoFactorDR': tipo_factor,
+                                    'TasaOCuotaDR': f'{float(tasa_dr):.6f}',
+                                    'ImporteDR': f'{importe_dr:.2f}'
+                                }
+                            ]
+                        }
+                    }
+                }
+            }
+        }
+    }
+    
+    return complemento_pago_dict
+
+#este se ejecuta antes de sellar
+def crear_cfdi_complemento(complemento_dict: dict, no_certificado, certificado_base64: str) -> str:
+    # Crear el nodo raíz
+    root = ET.Element('{http://www.sat.gob.mx/cfd/4}Comprobante')
+    
+    # Agregar atributos del Comprobante
+    for key, value in complemento_dict['Comprobante'].items():
+        root.set(key, str(value))
+    
+    root.set("NoCertificado", no_certificado)
+    root.set("Certificado", certificado_base64)
+    
+    # Agregar namespaces
+    root.set('{http://www.w3.org/2001/XMLSchema-instance}schemaLocation', 
+             'http://www.sat.gob.mx/cfd/4 http://www.sat.gob.mx/sitio_internet/cfd/4/cfdv40.xsd')
+    
+    # Agregar Emisor
+    emisor = ET.SubElement(root, '{http://www.sat.gob.mx/cfd/4}Emisor')
+    for key, value in complemento_dict['Emisor'].items():
+        emisor.set(key, str(value))
+    
+    # Agregar Receptor
+    receptor = ET.SubElement(root, '{http://www.sat.gob.mx/cfd/4}Receptor')
+    for key, value in complemento_dict['Receptor'].items():
+        receptor.set(key, str(value))
+    
+    # Agregar Conceptos
+    conceptos = ET.SubElement(root, '{http://www.sat.gob.mx/cfd/4}Conceptos')
+    concepto = ET.SubElement(conceptos, '{http://www.sat.gob.mx/cfd/4}Concepto')
+    for key, value in complemento_dict['Conceptos']['Concepto'].items():
+        concepto.set(key, str(value))
+    
+    # Agregar Complemento
+    complemento = ET.SubElement(root, '{http://www.sat.gob.mx/cfd/4}Complemento')
+    
+    # Agregar Pagos
+    pagos = ET.SubElement(complemento, '{http://www.sat.gob.mx/Pagos20}Pagos')
+    pagos.set('Version', '2.0')
+    pagos.set('{http://www.w3.org/2001/XMLSchema-instance}schemaLocation',
+              'http://www.sat.gob.mx/Pagos20 http://www.sat.gob.mx/sitio_internet/cfd/Pagos/Pagos20.xsd')
+    
+    # Agregar Totales
+    totales = ET.SubElement(pagos, '{http://www.sat.gob.mx/Pagos20}Totales')
+    for key, value in complemento_dict['Complemento']['Pagos']['Totales'].items():
+        if value is not None:
+            totales.set(key, str(value))
+    
+    # Agregar Pago
+    pago = ET.SubElement(pagos, '{http://www.sat.gob.mx/Pagos20}Pago')
+    pago_data = complemento_dict['Complemento']['Pagos']['Pago']
+    for key, value in pago_data.items():
+        if key not in ['DoctoRelacionado', 'ImpuestosP'] and value is not None:
+            pago.set(key, str(value))
+
+    # Agregar DoctoRelacionado
+    docto = ET.SubElement(pago, '{http://www.sat.gob.mx/Pagos20}DoctoRelacionado')
+    docto_data = pago_data['DoctoRelacionado']
+    for key, value in docto_data.items():
+        if key != 'ImpuestosDR' and value is not None:
+            docto.set(key, str(value))
+    
+    # Agregar ImpuestosDR
+    impuestos_dr = ET.SubElement(docto, '{http://www.sat.gob.mx/Pagos20}ImpuestosDR')
+    traslados_dr = ET.SubElement(impuestos_dr, '{http://www.sat.gob.mx/Pagos20}TrasladosDR')
+    
+    for traslado_data in docto_data['ImpuestosDR']['TrasladosDR']:
+        traslado_dr = ET.SubElement(traslados_dr, '{http://www.sat.gob.mx/Pagos20}TrasladoDR')
+        for key, value in traslado_data.items():
+            traslado_dr.set(key, str(value))
+
+    # Después de crear el nodo pago y antes de DoctoRelacionado
+    if 'ImpuestosP' in pago_data:
+        impuestos_p = ET.SubElement(pago, '{http://www.sat.gob.mx/Pagos20}ImpuestosP')
+        
+        if 'TrasladosP' in pago_data['ImpuestosP']:
+            traslados_p = ET.SubElement(impuestos_p, '{http://www.sat.gob.mx/Pagos20}TrasladosP')
+            
+            for traslado_p_data in pago_data['ImpuestosP']['TrasladosP']:
+                traslado_p = ET.SubElement(traslados_p, '{http://www.sat.gob.mx/Pagos20}TrasladoP')
+                for key, value in traslado_p_data.items():
+                    traslado_p.set(key, str(value))
+    
+    # Convertir a string
+    xml_string = ET.tostring(root, encoding='unicode', method='xml')
+    return xml_string
+
 
 @app.route("/timbrar-aplicacion-anticipo", methods=["POST"])
 def timbrar_aplicacion_anticipo():
@@ -285,6 +537,96 @@ def timbrar_aplicacion_anticipo():
 
     except Exception as e:
         return jsonify({"success": False, "error": str(e)}), 500
+
+
+def extraer_uuid_cfdi(xml_cfdi: str) -> str:
+    ns = {
+        "cfdi": "http://www.sat.gob.mx/cfd/4",
+        "tfd": "http://www.sat.gob.mx/TimbreFiscalDigital"
+    }
+    root = ET.fromstring(xml_cfdi)
+    timbre = root.find(".//tfd:TimbreFiscalDigital", ns)
+    return timbre.attrib.get("UUID") if timbre is not None else None
+
+def parse_filemaker_xml(xml_str: str) -> dict:
+    ns = {"fm": "http://www.filemaker.com/fmpdsoresult"}
+    root = ET.fromstring(xml_str)
+    rows = root.findall("fm:ROW", ns)
+    if not rows:
+        raise Exception("No se encontraron ROW en XML FileMaker")
+    
+    def get(row, tag):
+        el = row.find(f"fm:{tag}/fm:DATA", ns)
+        return el.text.strip() if el is not None and el.text else ""
+    
+    def getSinData(row, tag):
+        el = row.find(f"fm:{tag}", ns)
+        return el.text.strip() if el is not None and el.text else ""
+    
+    # Tomamos datos generales del primer ROW (comunes a todos los conceptos)
+    first = rows[0]
+    
+    # Procesar todos los conceptos (uno por cada ROW)
+    conceptos = []
+    for row in rows:
+        concepto = {
+            "clave_prod_serv": getSinData(row, "ClaveProdServ"),
+            "cantidad": Decimal(getSinData(row, "cantidad") or "0"),
+            "clave_unidad": getSinData(row, "Clave_unidad"),
+            "unidad": getSinData(row, "unidad"),
+            "descripcion": getSinData(row, "ConceptoItem"),
+            "valor_unitario": Decimal(getSinData(row, "Monto") or "0"),
+            "importe": Decimal(getSinData(row, "Importe") or "0"),
+            "descuento": Decimal(getSinData(row, "DescuentoItem") or "0"),
+            "tasa_iva": Decimal(getSinData(row, "tasa_IVA_porcentaje") or "0"),
+            "monto_item_iva": Decimal(getSinData(row, "monto_item_IVA") or "0")
+        }
+        conceptos.append(concepto)
+    
+    factura = {
+        "emisor": {
+            "rfc": get(first, "Emisor_RFC"),
+            "nombre": get(first, "Emisor_Nombre"),
+            "regimen": get(first, "Emisor_c_RegimenFiscal"),
+            "cp": get(first, "Emisor_codigo_postal")
+        },
+        "receptor": {
+            "rfc": get(first, "Receptor_RFC"),
+            "nombre": get(first, "Receptor_Nombre_Cliente_opc"),
+            "regimen": get(first, "Receptor_regimen"),
+            "uso_cfdi": get(first, "Receptor_UsoCFDI"),
+            "cp": get(first, "Receptor_CP_opc")
+        },
+        "conceptos": conceptos,  # Lista de conceptos
+        "serie": get(first, "serie"),
+        "folio": get(first, "folio"),
+        "metodo_pago": get(first, "Metodo_de_pago"),
+        "forma_pago": get(first, "Forma_de_pago"),
+        "subtotal": Decimal(get(first, "Subtotal") or "0"),
+        "iva": Decimal(get(first, "Iva") or "0"),
+        "total": Decimal(get(first, "Total") or "0"),
+    }
+    return factura
+
+def crear_cfdi_desde_contexto(contexto: dict, certificado_path: str, key_path: str, password: str, xslt_path: str = None) -> str:
+    uuid_origen = contexto.get("uuid_origen")
+    factura = contexto.get("factura")
+    
+    if not uuid_origen or not factura:
+        raise ValueError("Contexto debe contener 'uuid_origen' y 'factura'")
+    
+    # Cargar certificado y llave privada
+    certificado_base64, no_certificado = cargar_certificado(certificado_path)
+    llave_privada = cargar_llave_privada(key_path, password)
+    
+    # Crear el XML del CFDI
+    xml_sin_sellar = generar_xml_cfdi(factura, uuid_origen, no_certificado, certificado_base64)
+    # print(f"xml_sinSellar: {xml_sin_sellar}")
+    
+    # Sellar el CFDI
+    xml_sellado = sellar_cfdi(xml_sin_sellar, llave_privada,certificado_base64, xslt_path)
+    
+    return xml_sellado
 
 
 if __name__ == "__main__":

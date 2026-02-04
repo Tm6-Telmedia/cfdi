@@ -1,19 +1,16 @@
 import os
-from decimal import Decimal
 import xml.etree.ElementTree as ET
 from zeep import Client
-from zeep.transports import Transport
-from requests import Session
-
-from lxml import etree
 from datetime import datetime
 from decimal import Decimal
-import base64
+from lxml import etree
 from cryptography.hazmat.primitives import hashes, serialization
 from cryptography.hazmat.primitives.asymmetric import padding
 from cryptography.hazmat.backends import default_backend
 from cryptography import x509
+import base64
 import pytz
+
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 
@@ -26,96 +23,6 @@ RUTA_XSLT = r"xslt\cadenaoriginal_4_0.xslt"
 PAC_WSDL = "https://testing.solucionfactible.com/ws/services/Timbrado?wsdl"
 PAC_USER = "testing@solucionfactible.com"
 PAC_PASSWORD = "timbrado.SF.16672"
-
-def extraer_uuid_cfdi(xml_cfdi: str) -> str:
-    ns = {
-        "cfdi": "http://www.sat.gob.mx/cfd/4",
-        "tfd": "http://www.sat.gob.mx/TimbreFiscalDigital"
-    }
-    root = ET.fromstring(xml_cfdi)
-    timbre = root.find(".//tfd:TimbreFiscalDigital", ns)
-    return timbre.attrib.get("UUID") if timbre is not None else None
-
-def parse_filemaker_xml(xml_str: str) -> dict:
-    ns = {"fm": "http://www.filemaker.com/fmpdsoresult"}
-    root = ET.fromstring(xml_str)
-    rows = root.findall("fm:ROW", ns)
-    if not rows:
-        raise Exception("No se encontraron ROW en XML FileMaker")
-    
-    def get(row, tag):
-        el = row.find(f"fm:{tag}/fm:DATA", ns)
-        return el.text.strip() if el is not None and el.text else ""
-    
-    def getSinData(row, tag):
-        el = row.find(f"fm:{tag}", ns)
-        return el.text.strip() if el is not None and el.text else ""
-    
-    # Tomamos datos generales del primer ROW (comunes a todos los conceptos)
-    first = rows[0]
-    
-    # Procesar todos los conceptos (uno por cada ROW)
-    conceptos = []
-    for row in rows:
-        concepto = {
-            "clave_prod_serv": getSinData(row, "ClaveProdServ"),
-            "cantidad": Decimal(getSinData(row, "cantidad") or "0"),
-            "clave_unidad": getSinData(row, "Clave_unidad"),
-            "unidad": getSinData(row, "unidad"),
-            "descripcion": getSinData(row, "ConceptoItem"),
-            "valor_unitario": Decimal(getSinData(row, "Monto") or "0"),
-            "importe": Decimal(getSinData(row, "Importe") or "0"),
-            "descuento": Decimal(getSinData(row, "DescuentoItem") or "0"),
-            "tasa_iva": Decimal(getSinData(row, "tasa_IVA_porcentaje") or "0"),
-            "monto_item_iva": Decimal(getSinData(row, "monto_item_IVA") or "0")
-        }
-        conceptos.append(concepto)
-    
-    factura = {
-        "emisor": {
-            "rfc": get(first, "Emisor_RFC"),
-            "nombre": get(first, "Emisor_Nombre"),
-            "regimen": get(first, "Emisor_c_RegimenFiscal"),
-            "cp": get(first, "Emisor_codigo_postal")
-        },
-        "receptor": {
-            "rfc": get(first, "Receptor_RFC"),
-            "nombre": get(first, "Receptor_Nombre_Cliente_opc"),
-            "regimen": get(first, "Receptor_regimen"),
-            "uso_cfdi": get(first, "Receptor_UsoCFDI"),
-            "cp": get(first, "Receptor_CP_opc")
-        },
-        "conceptos": conceptos,  # Lista de conceptos
-        "serie": get(first, "serie"),
-        "folio": get(first, "folio"),
-        "metodo_pago": get(first, "Metodo_de_pago"),
-        "forma_pago": get(first, "Forma_de_pago"),
-        "subtotal": Decimal(get(first, "Subtotal") or "0"),
-        "iva": Decimal(get(first, "Iva") or "0"),
-        "total": Decimal(get(first, "Total") or "0"),
-    }
-    return factura
-
-def crear_cfdi_desde_contexto(contexto: dict, certificado_path: str, key_path: str, password: str, xslt_path: str = None) -> str:
-    uuid_origen = contexto.get("uuid_origen")
-    factura = contexto.get("factura")
-    
-    if not uuid_origen or not factura:
-        raise ValueError("Contexto debe contener 'uuid_origen' y 'factura'")
-    
-    # Cargar certificado y llave privada
-    certificado_base64, no_certificado = cargar_certificado(certificado_path)
-    llave_privada = cargar_llave_privada(key_path, password)
-    
-    # Crear el XML del CFDI
-    xml_sin_sellar = generar_xml_cfdi(factura, uuid_origen, no_certificado, certificado_base64)
-    # print(f"xml_sinSellar: {xml_sin_sellar}")
-    
-    # Sellar el CFDI
-    xml_sellado = sellar_cfdi(xml_sin_sellar, llave_privada,certificado_base64, xslt_path)
-    
-    return xml_sellado
-
 
 def cargar_certificado(cert_path: str) -> tuple:
     with open(cert_path, 'rb') as f:
@@ -135,6 +42,7 @@ def cargar_certificado(cert_path: str) -> tuple:
     certificado_base64 = base64.b64encode(cert_data).decode('ascii')
     
     return certificado_base64, no_certificado
+
 
 def cargar_llave_privada(key_path: str, password):
     """
@@ -156,6 +64,100 @@ def cargar_llave_privada(key_path: str, password):
     
     return private_key
 
+def timbrar_con_pac(xml_bytes: bytes) -> dict:
+    """
+    Envía un CFDI al PAC (Solución Factible) para timbrar.
+    Recibe el XML sellado (bytes) y regresa dict con uuid y xml_timbrado (base64).
+    """
+    try:
+        client = Client(PAC_WSDL)
+        xml_b64 = base64.b64encode(xml_bytes).decode()
+        
+        result = client.service.timbrar(PAC_USER, PAC_PASSWORD, xml_b64, False)
+        
+        # print(f"RESPUESTA DEL PAC - Status: {result.status}")
+        
+        if result.status != 200:
+            mensaje = getattr(result, 'mensaje', 'Error desconocido en el timbrado')
+            # print(f"ERROR DEL PAC: {mensaje}")
+            return None, mensaje
+        
+        # DEBUG: Verificar qué contiene result
+        # print(f"DEBUG - Atributos de result: {dir(result)}")
+        # print(f"DEBUG - Tiene resultados: {hasattr(result, 'resultados')}")
+        
+        # Verificar que resultados existe y tiene elementos
+        if not hasattr(result, 'resultados') or not result.resultados or len(result.resultados) == 0:
+            # print("DEBUG - No hay resultados en la respuesta del PAC")
+            return None, "No se recibieron resultados del PAC"
+        
+        # print(f"DEBUG - Número de resultados: {len(result.resultados)}")
+        primer_resultado = result.resultados[0]
+        # print(f"DEBUG - Atributos del primer resultado: {dir(primer_resultado)}")
+        
+        cfdi = primer_resultado.cfdiTimbrado
+        # print(f"DEBUG - cfdiTimbrado es None: {cfdi is None}")
+        # if cfdi:
+            # print(f"DEBUG - Tipo de cfdi: {type(cfdi)}")
+            # print(f"DEBUG - Longitud de cfdi: {len(cfdi) if hasattr(cfdi, '__len__') else 'N/A'}")
+        
+        # Verificar que cfdi no sea None
+        if cfdi is None:
+            if hasattr(primer_resultado, 'mensaje'):
+                # print(f"DEBUG - Mensaje del resultado: {primer_resultado.mensaje}")
+                return None, f"El PAC retornó vacío: {primer_resultado.mensaje}"
+            return None, "El PAC retornó un CFDI vacío"
+        
+        # El PAC devuelve el XML directamente como bytes, no en base64
+        if isinstance(cfdi, bytes):
+            cfdi_bytes = cfdi
+        elif isinstance(cfdi, str):
+            # Si es string, verificar si empieza con <?xml (no está en base64)
+            if cfdi.strip().startswith('<?xml'):
+                cfdi_bytes = cfdi.encode('utf-8')
+            else:
+                # Si no empieza con <?xml, asumir que está en base64
+                try:
+                    cfdi_bytes = base64.b64decode(cfdi)
+                except Exception as decode_error:
+                    cfdi_bytes = cfdi.encode('utf-8')
+        else:
+            cfdi_bytes = str(cfdi).encode('utf-8')
+        
+        # print(" TIMBRADO EXITOSO")
+        return cfdi_bytes
+    
+    except Exception as e:
+        # print(f" ERROR AL CONECTAR CON EL PAC: {str(e)}")
+        return None, f"Error al conectar con el PAC: {str(e)}"
+        
+    except Exception as e:
+        error_msg = f"Error al timbrar: {str(e)}"
+        print(f" {error_msg}")
+        import traceback
+        traceback.print_exc()
+        return {'error': error_msg}
+
+def generar_xml_timbrado(xml_timbrado: bytes):
+    try:
+        # Preparar respuesta
+        respuesta = {
+            "xml": xml_timbrado.decode('utf-8'),
+            "success": True
+        }
+        
+        return respuesta
+        
+    except Exception as e:
+        return {
+            "error": f"Error procesando archivos: {str(e)}",
+            "success": False
+        }
+
+"""
+las funciones de abajo son propias del proceso timbrado pero a su vez son 
+funciones exclusivas de aplicacion DE ANTICIPO
+"""
 
 def generar_xml_cfdi(factura: dict, uuid_origen: str, no_certificado, certificado_base64: str) -> str:
     """
@@ -325,6 +327,52 @@ def sellar_cfdi(xml_sin_sellar: str, llave_privada, certificado_base64: str, xsl
     
     return xml_sellado
 
+
+"""
+las funciones de abajo son propias del proceso timbrado pero a su vez son 
+funciones exclusivas de COMPLEMENTO DE PAGO
+"""
+
+def sellar_cfdi_complemento(xml_sin_sellar: str, llave_privada,  xslt_path: str = None) -> str:
+    """
+    Genera la cadena original, sellarlo con la llave privada y agrega el sello al XML
+    """
+    # Parse del XML
+    tree = etree.fromstring(xml_sin_sellar.encode('utf-8'))
+    
+    # Generar cadena original
+    if xslt_path and os.path.exists(xslt_path):
+        # Método oficial con XSLT del SAT
+        xslt = etree.parse(xslt_path)
+        transform = etree.XSLT(xslt)
+        cadena_original = str(transform(tree))
+    else:
+        # Método simplificado (para desarrollo/pruebas)
+        cadena_original = generar_cadena_original_simplificada(tree)
+    
+    # Firmar la cadena original
+    sello = llave_privada.sign(
+        cadena_original.encode('utf-8'),
+        padding.PKCS1v15(),
+        hashes.SHA256()
+    )
+    sello_b64 = base64.b64encode(sello).decode('ascii')
+    
+    # Agregar el sello al XML
+    tree.attrib['Sello'] = sello_b64
+    
+    # Convertir a string
+    xml_sellado = etree.tostring(
+        tree,
+        encoding='UTF-8',
+        xml_declaration=True,
+        pretty_print=True
+    ).decode('utf-8')
+    
+    return xml_sellado
+
+
+# la funcion de abajo se utiliza para ambos cfdi para poder sellar
 def generar_cadena_original_simplificada(xml_element) -> str:
     """
     Genera la cadena original del CFDI (versión simplificada)
@@ -349,132 +397,3 @@ def generar_cadena_original_simplificada(xml_element) -> str:
     
     return cadena
 
-def generar_cadena_original(xml_element) -> str:
-    """
-    Genera la cadena original del CFDI usando el XSLT del SAT para CFDI 4.0
-    Esta es una versión simplificada. En producción deberías usar el XSLT oficial del SAT.
-    """
-    # Crear cadena original concatenando atributos en orden
-    cadena = '||'
-    
-    def agregar_atributos(elemento, nivel=0):
-        nonlocal cadena
-        # Agregar atributos del elemento en orden alfabético
-        for attr in sorted(elemento.attrib.keys()):
-            if attr not in ['Sello', 'Certificado']:  # Excluir sello y certificado
-                valor = elemento.attrib[attr]
-                cadena += f'{valor}|'
-        
-        # Recursivamente procesar hijos
-        for hijo in elemento:
-            agregar_atributos(hijo, nivel + 1)
-    
-    agregar_atributos(xml_element)
-    cadena += '|'
-    
-    return cadena
-
-
-def firmar_cadena(cadena: str, llave_privada) -> str:
-    # Firmar con SHA256 y RSA
-    firma = llave_privada.sign(
-        cadena.encode('utf-8'),
-        padding.PKCS1v15(),
-        hashes.SHA256()
-    )
-    
-    # Convertir a base64
-    firma_base64 = base64.b64encode(firma).decode('utf-8')
-    
-    return firma_base64
-
-
-def timbrar_con_pac(xml_bytes: bytes) -> dict:
-    """
-    Envía un CFDI al PAC (Solución Factible) para timbrar.
-    Recibe el XML sellado (bytes) y regresa dict con uuid y xml_timbrado (base64).
-    """
-    try:
-        client = Client(PAC_WSDL)
-        xml_b64 = base64.b64encode(xml_bytes).decode()
-        
-        result = client.service.timbrar(PAC_USER, PAC_PASSWORD, xml_b64, False)
-        
-        # print(f"RESPUESTA DEL PAC - Status: {result.status}")
-        
-        if result.status != 200:
-            mensaje = getattr(result, 'mensaje', 'Error desconocido en el timbrado')
-            # print(f"ERROR DEL PAC: {mensaje}")
-            return None, mensaje
-        
-        # DEBUG: Verificar qué contiene result
-        # print(f"DEBUG - Atributos de result: {dir(result)}")
-        # print(f"DEBUG - Tiene resultados: {hasattr(result, 'resultados')}")
-        
-        # Verificar que resultados existe y tiene elementos
-        if not hasattr(result, 'resultados') or not result.resultados or len(result.resultados) == 0:
-            # print("DEBUG - No hay resultados en la respuesta del PAC")
-            return None, "No se recibieron resultados del PAC"
-        
-        # print(f"DEBUG - Número de resultados: {len(result.resultados)}")
-        primer_resultado = result.resultados[0]
-        # print(f"DEBUG - Atributos del primer resultado: {dir(primer_resultado)}")
-        
-        cfdi = primer_resultado.cfdiTimbrado
-        # print(f"DEBUG - cfdiTimbrado es None: {cfdi is None}")
-        # if cfdi:
-            # print(f"DEBUG - Tipo de cfdi: {type(cfdi)}")
-            # print(f"DEBUG - Longitud de cfdi: {len(cfdi) if hasattr(cfdi, '__len__') else 'N/A'}")
-        
-        # Verificar que cfdi no sea None
-        if cfdi is None:
-            if hasattr(primer_resultado, 'mensaje'):
-                # print(f"DEBUG - Mensaje del resultado: {primer_resultado.mensaje}")
-                return None, f"El PAC retornó vacío: {primer_resultado.mensaje}"
-            return None, "El PAC retornó un CFDI vacío"
-        
-        # El PAC devuelve el XML directamente como bytes, no en base64
-        if isinstance(cfdi, bytes):
-            cfdi_bytes = cfdi
-        elif isinstance(cfdi, str):
-            # Si es string, verificar si empieza con <?xml (no está en base64)
-            if cfdi.strip().startswith('<?xml'):
-                cfdi_bytes = cfdi.encode('utf-8')
-            else:
-                # Si no empieza con <?xml, asumir que está en base64
-                try:
-                    cfdi_bytes = base64.b64decode(cfdi)
-                except Exception as decode_error:
-                    cfdi_bytes = cfdi.encode('utf-8')
-        else:
-            cfdi_bytes = str(cfdi).encode('utf-8')
-        
-        # print(" TIMBRADO EXITOSO")
-        return cfdi_bytes
-    
-    except Exception as e:
-        # print(f" ERROR AL CONECTAR CON EL PAC: {str(e)}")
-        return None, f"Error al conectar con el PAC: {str(e)}"
-        
-    except Exception as e:
-        error_msg = f"Error al timbrar: {str(e)}"
-        print(f" {error_msg}")
-        import traceback
-        traceback.print_exc()
-        return {'error': error_msg}
-
-def generar_xml_timbrado(xml_timbrado: bytes):
-    try:
-        # Preparar respuesta
-        respuesta = {
-            "xml": xml_timbrado.decode('utf-8'),
-            "success": True
-        }
-        
-        return respuesta
-        
-    except Exception as e:
-        return {
-            "error": f"Error procesando archivos: {str(e)}",
-            "success": False
-        }
