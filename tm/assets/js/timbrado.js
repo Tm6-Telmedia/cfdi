@@ -158,6 +158,17 @@ function validarCFDI(archivoXML) {
     });
 }
 
+function validarFolio(folio) {
+    folio.trim();
+    if ( folio === '') {
+        alert('El folio no puede tener espacios en blanco');
+        if (folio.length < 4 || folio.length > 4 ) {
+            alert('El folio debe ser de 4 digitos')
+        } 
+        return
+    }
+}
+
 
 // MOSTRAR/OCULTAR FORMA DE PAGO Y SECCIONES XML SEGÚN TIPO SELECCIONADO
 document.getElementById("tipoTimbrado").onchange = function() {
@@ -255,6 +266,127 @@ document.getElementById("xmlAplicacion").onchange = function() {
         fileNameDiv.textContent = "";
     }
 };
+
+
+function validarEntradasXML(xmlDom) {
+    const reader = new FileReader();
+
+    reader.onload = function (e) {
+        const xmlString = e.target.result;
+        const parser = new DOMParser();
+        const xmlDoc = parser.parseFromString(xmlString, "text/xml");
+        
+        // IMPORTANTE: Guardar el XML parseado en xmlOriginal
+        xmlOriginal = xmlDoc;
+
+        // Leer etiquetas A NIVEL DE COMPROBANTE
+        const comprobante = xmlDoc.getElementsByTagName("cfdi:Comprobante")[0];
+        // const ImpuestosComprobante = comprobante.getElementsByTagName("cfdi:Impuestos")[0];
+
+
+        const impuestosDelComprobante = Array.from(comprobante.children).find(
+            child => child.tagName === 'cfdi:Impuestos'
+        );
+
+        if (!impuestosDelComprobante) {
+            alert("No se encontró el nodo de Impuestos a nivel de Comprobante");
+            return;
+        }
+
+        // ==================== PRUEBAS ===============================
+
+
+        const trasladoossss = impuestosDelComprobante.getAttribute("TotalImpuestosTrasladados") || "";
+        console.log(trasladoossss)
+
+
+
+
+        const traslados = impuestosDelComprobante.getElementsByTagName("cfdi:Traslados")[0];
+        const trasladoGlobal = traslados.getElementsByTagName("cfdi:Traslado")[0];
+
+        const folio = comprobante.getAttribute("Folio") || "";
+        const fechaOriginal = comprobante.getAttribute("Fecha") || "";
+        const base = trasladoGlobal.getAttribute("Base") || "";
+        console.log(base)
+        const importe = trasladoGlobal.getAttribute("Importe") || "";
+
+        const section = document.querySelector('#xmlUnicoSection');
+
+        // ========== FECHA Y HORA ==========
+        const lbFecha = document.createElement('label');
+        lbFecha.textContent = 'Fecha y Hora:';
+        
+        // Convertir formato XML a formato datetime-local
+        // De: "2026-01-08T13:12:50" a "2026-01-08T13:12"
+        let fechaParaInput = fechaOriginal;
+        if (fechaOriginal) {
+            fechaParaInput = fechaOriginal.substring(0, 16); // Quitar los segundos
+        }
+        
+        const entradaFecha = document.createElement('input');
+        entradaFecha.classList.add('entradas');
+        entradaFecha.type = 'datetime-local';
+        entradaFecha.value = fechaParaInput;
+        
+        section.appendChild(lbFecha);
+        section.appendChild(entradaFecha);
+        
+        entradaFecha.addEventListener('input', () => {
+            // Convertir formato datetime-local a formato XML
+            // De: "2026-01-08T13:12" a "2026-01-08T13:12:50"
+            if (entradaFecha.value) {
+                const fechaFormateada = entradaFecha.value + ":00"; // Agregar segundos
+                comprobante.setAttribute("Fecha", fechaFormateada);
+            }
+        });
+
+        // ========== FOLIO ==========
+        const lbFolio = document.createElement('label');
+        lbFolio.textContent = 'Folio:';
+        const entradaFolio = document.createElement('input');
+        entradaFolio.classList.add('entradas');
+        entradaFolio.type = 'text';
+        entradaFolio.value = folio;
+        section.appendChild(lbFolio);
+        section.appendChild(entradaFolio);
+        
+        entradaFolio.addEventListener('input', () => {
+            comprobante.setAttribute("Folio", entradaFolio.value);
+        });
+
+        // ========== BASE ==========
+        const lbBase = document.createElement('label');
+        lbBase.textContent = 'Base:';
+        const entradaBase = document.createElement('input');
+        entradaBase.classList.add('entradas');
+        entradaBase.type = 'text';
+        entradaBase.value = base;
+        section.appendChild(lbBase);
+        section.appendChild(entradaBase);
+
+        entradaBase.addEventListener('input', () => {
+            trasladoGlobal.setAttribute("Base", entradaBase.value);
+        });
+
+        // ========== IMPORTE ==========
+        const lbImporte = document.createElement('label');
+        lbImporte.textContent = 'Importe:';
+        const entradaImporte = document.createElement('input');
+        entradaImporte.classList.add('entradas');
+        entradaImporte.type = 'text';
+        entradaImporte.value = importe;
+        section.appendChild(lbImporte);
+        section.appendChild(entradaImporte);
+
+        entradaImporte.addEventListener('input', () => {
+            trasladoGlobal.setAttribute("Importe", entradaImporte.value);
+        });
+    }
+    
+    reader.readAsText(xmlDom);
+}
+
 
 // Función para validar que la fecha no exceda 72 horas
 function validarFechaXML(xmlDoc) {
@@ -423,116 +555,6 @@ function procesarDatosFaltantes(xml) {
     
     document.getElementById("faltantesCampos").innerHTML = html;
     document.getElementById("faltantesSection").classList.remove("hidden");
-}
-
-
-function validarFolio(folio) {
-    folio.trim();
-    if ( folio === '') {
-        alert('El folio no puede tener espacios en blanco');
-        if (folio.length < 4 || folio.length > 4 ) {
-            alert('El folio debe ser de 4 digitos')
-        } 
-        return
-    }
-}
-
-function validarEntradasXML(xmlDom) {
-    const reader = new FileReader();
-
-    reader.onload = function (e) {
-        const xmlString = e.target.result;
-        const parser = new DOMParser();
-        const xmlDoc = parser.parseFromString(xmlString, "text/xml");
-        
-        // IMPORTANTE: Guardar el XML parseado en xmlOriginal
-        xmlOriginal = xmlDoc;
-
-        // Leer etiquetas A NIVEL DE COMPROBANTE
-        const comprobante = xmlDoc.getElementsByTagName("cfdi:Comprobante")[0];
-        const ImpuestosComprobante = comprobante.getElementsByTagName("cfdi:Impuestos")[0];
-        const traslados = ImpuestosComprobante.getElementsByTagName("cfdi:Traslados")[0];
-        const trasladoGlobal = traslados.getElementsByTagName("cfdi:Traslado")[0];
-
-        const folio = comprobante.getAttribute("Folio") || "";
-        const fechaOriginal = comprobante.getAttribute("Fecha") || "";
-        const base = trasladoGlobal.getAttribute("Base") || "";
-        const importe = trasladoGlobal.getAttribute("Importe") || "";
-
-        const section = document.querySelector('#xmlUnicoSection');
-
-        // ========== FECHA Y HORA ==========
-        const lbFecha = document.createElement('label');
-        lbFecha.textContent = 'Fecha y Hora:';
-        
-        // Convertir formato XML a formato datetime-local
-        // De: "2026-01-08T13:12:50" a "2026-01-08T13:12"
-        let fechaParaInput = fechaOriginal;
-        if (fechaOriginal) {
-            fechaParaInput = fechaOriginal.substring(0, 16); // Quitar los segundos
-        }
-        
-        const entradaFecha = document.createElement('input');
-        entradaFecha.classList.add('entradas');
-        entradaFecha.type = 'datetime-local';
-        entradaFecha.value = fechaParaInput;
-        
-        section.appendChild(lbFecha);
-        section.appendChild(entradaFecha);
-        
-        entradaFecha.addEventListener('input', () => {
-            // Convertir formato datetime-local a formato XML
-            // De: "2026-01-08T13:12" a "2026-01-08T13:12:50"
-            if (entradaFecha.value) {
-                const fechaFormateada = entradaFecha.value + ":00"; // Agregar segundos
-                comprobante.setAttribute("Fecha", fechaFormateada);
-            }
-        });
-
-        // ========== FOLIO ==========
-        const lbFolio = document.createElement('label');
-        lbFolio.textContent = 'Folio:';
-        const entradaFolio = document.createElement('input');
-        entradaFolio.classList.add('entradas');
-        entradaFolio.type = 'text';
-        entradaFolio.value = folio;
-        section.appendChild(lbFolio);
-        section.appendChild(entradaFolio);
-        
-        entradaFolio.addEventListener('input', () => {
-            comprobante.setAttribute("Folio", entradaFolio.value);
-        });
-
-        // ========== BASE ==========
-        const lbBase = document.createElement('label');
-        lbBase.textContent = 'Base:';
-        const entradaBase = document.createElement('input');
-        entradaBase.classList.add('entradas');
-        entradaBase.type = 'text';
-        entradaBase.value = base;
-        section.appendChild(lbBase);
-        section.appendChild(entradaBase);
-
-        entradaBase.addEventListener('input', () => {
-            trasladoGlobal.setAttribute("Base", entradaBase.value);
-        });
-
-        // ========== IMPORTE ==========
-        const lbImporte = document.createElement('label');
-        lbImporte.textContent = 'Importe:';
-        const entradaImporte = document.createElement('input');
-        entradaImporte.classList.add('entradas');
-        entradaImporte.type = 'text';
-        entradaImporte.value = importe;
-        section.appendChild(lbImporte);
-        section.appendChild(entradaImporte);
-
-        entradaImporte.addEventListener('input', () => {
-            trasladoGlobal.setAttribute("Importe", entradaImporte.value);
-        });
-    }
-    
-    reader.readAsText(xmlDom);
 }
 
 

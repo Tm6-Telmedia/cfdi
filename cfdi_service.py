@@ -75,25 +75,25 @@ def timbrar_con_pac(xml_bytes: bytes) -> dict:
         
         result = client.service.timbrar(PAC_USER, PAC_PASSWORD, xml_b64, False)
         
-        # print(f"RESPUESTA DEL PAC - Status: {result.status}")
+        print(f"RESPUESTA DEL PAC - Status: {result.status}")
         
         if result.status != 200:
             mensaje = getattr(result, 'mensaje', 'Error desconocido en el timbrado')
-            # print(f"ERROR DEL PAC: {mensaje}")
+            print(f"ERROR DEL PAC: {mensaje}")
             return None, mensaje
         
         # DEBUG: Verificar qué contiene result
-        # print(f"DEBUG - Atributos de result: {dir(result)}")
-        # print(f"DEBUG - Tiene resultados: {hasattr(result, 'resultados')}")
+        print(f"DEBUG - Atributos de result: {dir(result)}")
+        print(f"DEBUG - Tiene resultados: {hasattr(result, 'resultados')}")
         
         # Verificar que resultados existe y tiene elementos
         if not hasattr(result, 'resultados') or not result.resultados or len(result.resultados) == 0:
             # print("DEBUG - No hay resultados en la respuesta del PAC")
             return None, "No se recibieron resultados del PAC"
         
-        # print(f"DEBUG - Número de resultados: {len(result.resultados)}")
+        print(f"DEBUG - Número de resultados: {len(result.resultados)}")
         primer_resultado = result.resultados[0]
-        # print(f"DEBUG - Atributos del primer resultado: {dir(primer_resultado)}")
+        print(f"DEBUG - Atributos del primer resultado: {dir(primer_resultado)}")
         
         cfdi = primer_resultado.cfdiTimbrado
         # print(f"DEBUG - cfdiTimbrado es None: {cfdi is None}")
@@ -104,7 +104,7 @@ def timbrar_con_pac(xml_bytes: bytes) -> dict:
         # Verificar que cfdi no sea None
         if cfdi is None:
             if hasattr(primer_resultado, 'mensaje'):
-                # print(f"DEBUG - Mensaje del resultado: {primer_resultado.mensaje}")
+                print(f"DEBUG - Mensaje del resultado: {primer_resultado.mensaje}")
                 return None, f"El PAC retornó vacío: {primer_resultado.mensaje}"
             return None, "El PAC retornó un CFDI vacío"
         
@@ -128,7 +128,7 @@ def timbrar_con_pac(xml_bytes: bytes) -> dict:
         return cfdi_bytes
     
     except Exception as e:
-        # print(f" ERROR AL CONECTAR CON EL PAC: {str(e)}")
+        print(f" ERROR AL CONECTAR CON EL PAC: {str(e)}")
         return None, f"Error al conectar con el PAC: {str(e)}"
         
     except Exception as e:

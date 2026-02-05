@@ -219,7 +219,14 @@ def parse_xml_complemento(xml_cfdi: str, forma_pago: str) -> dict:
     emisor = root.find('cfdi:Emisor', ns).attrib
     receptor = root.find('cfdi:Receptor', ns).attrib 
     timbre = root.find('.//tfd:TimbreFiscalDigital', ns).attrib
-    
+
+    ##################################
+    # concepto_nodo = root.find('cfdi:Conceptos', ns)
+    # concepto_interno = concepto_nodo.find('cfdi:Concepto', ns)
+    # concepto_nodo
+
+
+
     # Extraer Impuestos
     impuestos_nodo = root.find('cfdi:Impuestos', ns)
     traslados = impuestos_nodo.find('cfdi:Traslados', ns)
