@@ -636,5 +636,167 @@ def crear_cfdi_desde_contexto(contexto: dict, certificado_path: str, key_path: s
     return xml_sellado
 
 
+
+@app.route("/timbrar-complemento-pago-ruta", methods=["GET"])
+def timbrar_complemento_pago_ruta():
+    try:
+        # Obtener parámetros de la URL
+        ruta_xml = request.args.get("ruta_xml")
+        forma_pago = request.args.get("forma_pago")
+        
+        if not ruta_xml or not forma_pago:
+            return jsonify({
+                "success": False, 
+                "error": "Faltan parámetros: ruta_xml y forma_pago"
+            }), 400
+        
+        # Validar que el archivo existe
+        if not os.path.exists(ruta_xml):
+            return jsonify({
+                "success": False, 
+                "error": f"Archivo no encontrado: {ruta_xml}"
+            }), 404
+        
+        # Leer el archivo XML
+        with open(ruta_xml, 'r', encoding='utf-8') as file:
+            xml_cfdi_string = file.read()
+        
+        # Proceso de timbrado
+        factura = parse_xml_complemento(xml_cfdi_string, forma_pago)
+        llave_privada = cargar_llave_privada(RUTA_KEY, PASSWORD_KEY)
+        certificado_base64, no_certificado = cargar_certificado(RUTA_CER)
+        xml_sin_sellar = crear_cfdi_complemento(factura, no_certificado, certificado_base64)
+        xml_sellado = sellar_cfdi_complemento(xml_sin_sellar, llave_privada, RUTA_XSLT)
+        
+        xml_bytes = xml_sellado.encode("utf-8")
+        guardar_xml(xml_bytes, tipo_comprobante="anticipo")
+        
+        xml_timbrado = timbrar_con_pac(xml_bytes)
+        respuesta = generar_xml_timbrado(xml_timbrado)
+        
+        xml_base64 = base64.b64encode(respuesta["xml"].encode('utf-8')).decode('utf-8')
+        xml_timbrado_bytes = respuesta["xml"].encode('utf-8')
+        
+        respuesta = generar_respuesta_dual(xml_timbrado_bytes, "P")
+        
+        return jsonify({
+            "success": True,
+            "xml_timbrado": xml_base64,
+            "pdf": respuesta["pdf"],
+            "pdf_filename": respuesta["pdf_filename"],
+            "archivo_procesado": ruta_xml
+        })
+    
+    except Exception as e:
+        return jsonify({"success": False, "error": str(e)}), 500
+
+
+@app.route("/timbrar-aplicacion-anticipo-ruta", methods=["GET"])
+def timbrar_aplicacion_anticipo_ruta():
+    try:
+        # Obtener parámetros de la URL
+        ruta_xml_anticipo = request.args.get("ruta_xml_anticipo")      # CFDI origen timbrado
+        ruta_xml_filemaker = request.args.get("ruta_xml_filemaker")    # XML FileMaker
+        
+        # Validar que se proporcionaron ambas rutas
+        if not ruta_xml_anticipo:
+            return jsonify({
+                "success": False, 
+                "error": "Falta el parámetro: ruta_xml_anticipo"
+            }), 400
+        
+        if not ruta_xml_filemaker:
+            return jsonify({
+                "success": False, 
+                "error": "Falta el parámetro: ruta_xml_filemaker"
+            }), 400
+        
+        # Validar que ambos archivos existen
+        if not os.path.exists(ruta_xml_anticipo):
+            return jsonify({
+                "success": False, 
+                "error": f"Archivo CFDI origen no encontrado: {ruta_xml_anticipo}"
+            }), 404
+        
+        if not os.path.exists(ruta_xml_filemaker):
+            return jsonify({
+                "success": False, 
+                "error": f"Archivo FileMaker no encontrado: {ruta_xml_filemaker}"
+            }), 404
+        
+        # Leer XMLs desde las rutas
+        with open(ruta_xml_anticipo, 'r', encoding='utf-8') as file:
+            xml_cfdi_string = file.read()
+        
+        with open(ruta_xml_filemaker, 'r', encoding='utf-8') as file:
+            xml_filemaker_string = file.read()
+        
+        # Extraer UUID del CFDI origen
+        uuid_origen = extraer_uuid_cfdi(xml_cfdi_string)
+        if not uuid_origen:
+            return jsonify({
+                "success": False, 
+                "error": "No se encontró UUID en CFDI origen"
+            }), 400
+        
+        # Parsear XML FileMaker
+        factura = parse_filemaker_xml(xml_filemaker_string)
+        
+        contexto = {
+            "uuid_origen": uuid_origen,
+            "factura": factura
+        }
+        
+        # Crear CFDI 4.0
+        xml_cfdi = crear_cfdi_desde_contexto(
+            contexto=contexto,
+            certificado_path=RUTA_CER,
+            key_path=RUTA_KEY,
+            password=PASSWORD_KEY,
+            xslt_path=RUTA_XSLT
+        )
+        
+        # Transformar xml en bytes
+        xml_bytes = xml_cfdi.encode("utf-8")
+        guardar_xml(xml_bytes, tipo_comprobante="anticipo")
+        
+        # Timbrar con PAC
+        xml_timbrado = timbrar_con_pac(xml_bytes)
+        respuesta = generar_xml_timbrado(xml_timbrado)
+        
+        xml_base64 = base64.b64encode(respuesta["xml"].encode('utf-8')).decode('utf-8')
+        
+        # Leer archivos como bytes para el PDF
+        with open(ruta_xml_filemaker, 'rb') as file:
+            xml_filemaker_bytes = file.read()
+        
+        xml_timbrado_str = respuesta["xml"]
+        xml_timbrado_bytes = xml_timbrado_str.encode('utf-8')
+        
+        pdf_bytes = generar_pdf_factura(
+            xml_timbrado=xml_timbrado_bytes,
+            tipo_comprobante="I",
+            xml_anticipo=xml_filemaker_bytes
+        )
+        
+        # Guardar y convertir PDF a base64
+        guardar_pdf(pdf_bytes, tipo_comprobante="anticipo")
+        pdf_base64 = base64.b64encode(pdf_bytes).decode('utf-8')
+        
+        return jsonify({
+            "success": True,
+            "xml_timbrado": xml_base64,
+            "pdf": pdf_base64,
+            "pdf_filename": "CFDI_Aplicacion_Anticipo.pdf",
+            "archivos_procesados": {
+                "cfdi_origen": ruta_xml_anticipo,
+                "filemaker": ruta_xml_filemaker
+            }
+        })
+    
+    except Exception as e:
+        return jsonify({"success": False, "error": str(e)}), 500
+
+
 if __name__ == "__main__":
     app.run(host='0.0.0.0', debug=True, ssl_context=context)
