@@ -4,8 +4,9 @@ pip install Flask==3.0.0 flask-cors==4.0.0 lxml==5.1.0 zeep==4.2.1 cryptography=
 """
 
 from flask import Flask, request, jsonify
-# from lxml import etree
+from lxml import etree
 import xml.etree.ElementTree as ET
+from io import BytesIO
 import base64
 from datetime import datetime
 # from zeep import Client
@@ -51,6 +52,8 @@ RUTA_KEY = os.path.join(BASE_DIR, "CSD_Sucursal_1_EKU9003173C9_20230517_223850.k
 PASSWORD_KEY = b"12345678a"  
 
 RUTA_XSLT = r"xslt\cadenaoriginal_4_0.xslt"
+RUTA_CFDI_XSD = r"xsd\cfdv40.xsd"
+RUTA_NOMINA_XSD = r"xsd\nomina12.xsd"
 
 # Constantes globales
 FILEMAKER_NAMESPACE = "http://www.filemaker.com/fmpdsoresult"
@@ -636,6 +639,73 @@ def crear_cfdi_desde_contexto(contexto: dict, certificado_path: str, key_path: s
     return xml_sellado
 
 
+@app.route("/timbrar-nomina", methods=["POST"])
+def timbrar_nomina():
+    try:
+        #  Recibir archivos
+        xml_nomina = request.files.get("xml")     # CFDI de nomina
+
+        if not xml_nomina:
+            return jsonify({"success": False, "error": "Falta el archivo CFDI origen"}), 400
+
+        #  Leer XMLs en string y bytes
+        cfdi_nomina_string = xml_nomina.read().decode("utf-8")
+        # print(cfdi_nomina_string)
+
+        llave_privada = cargar_llave_privada(RUTA_KEY, PASSWORD_KEY)
+
+        # Cargar certificado y llave privada
+        certificado_base64, no_certificado = cargar_certificado(RUTA_CER)
+
+        #agreagar certificado y no. certificado
+        xml_sin_sellar = crear_cfdi_nomina(cfdi_nomina_string, no_certificado, certificado_base64)
+        # print(xml_sin_sellar)
+
+        xml_sellado = sellar_cfdi_complemento(xml_sin_sellar,llave_privada, RUTA_XSLT)
+        print(xml_sellado)
+
+        #transformar xml en stringa bytes
+        xml_bytes = xml_sellado.encode("utf-8")
+        guardar_xml(xml_bytes, tipo_comprobante="nomina")
+
+        #timbrar con pac
+        xml_timbrado = timbrar_con_pac(xml_bytes) #bytes solo  es cfdi - listo
+
+        parseo_del_pac = generar_xml_timbrado(xml_timbrado)
+
+        # print(respuesta["xml"]) importante para generar xml
+        
+        xml_timbrado_str = parseo_del_pac["xml"]
+        xml_timbrado_bytes = xml_timbrado_str.encode('utf-8')   
+
+
+        # Generar respuesta dual (XML + PDF)
+        respuesta = generar_respuesta_dual(xml_timbrado_bytes, "Nomina")
+
+        return jsonify({
+            "success": True,
+            "message": "todo chido",
+            "xml_timbrado": respuesta["xml"]
+            # "pdf": respuesta["pdf"],
+            # "pdf_filename": respuesta["pdf_filename"],
+            # "archivo_procesado": ruta_xml
+        })
+
+    except Exception as e:
+        return jsonify({"success": False, "error": str(e)}), 500
+
+
+def crear_cfdi_nomina(xml_file, no_certificado, certificado_b64) -> str:
+     # Leer XML 
+    root = etree.fromstring(xml_file.encode("utf-8"))
+
+    # Agregar atributos al nodo Comprobante
+    root.set("Certificado", certificado_b64)
+    root.set("NoCertificado", no_certificado)
+
+    # Convertir a string
+    xml_string = ET.tostring(root, encoding='unicode', method='xml')
+    return xml_string
 
 @app.route("/timbrar-complemento-pago-ruta", methods=["GET"])
 def timbrar_complemento_pago_ruta():

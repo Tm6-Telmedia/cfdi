@@ -221,15 +221,23 @@ document.getElementById("btnContinuarTimbrado").onclick = () => {
         xmlAnticipoSection.classList.add("hidden");
         document.querySelector('#btnContinuarTimbrado').classList.add('hidden')
     }
+
+    if(tipoSeleccionado === "nomina") {
+        // para nomina solo es un xml
+        xmlUnicoSection.classList.remove("hidden");
+        xmlAnticipoSection.classList.add("hidden");
+        document.querySelector('#btnContinuarTimbrado').classList.add('hidden')
+    }
 };
 
 // MOSTRAR NOMBRE DEL ARCHIVO
 document.getElementById("xmlFile").onchange = function() {
+    const tipoSeleccionado = document.getElementById("tipoTimbrado").value;
     const archivo = this.files[0];
     const fileNameDiv = document.getElementById("fileName");
     if(archivo) {
         fileNameDiv.textContent = archivo.name;
-        validarEntradasXML(archivo);
+        if(tipoSeleccionado === "complemento")validarEntradasXML(archivo);
     } else {
         fileNameDiv.textContent = "";
     }
@@ -292,15 +300,6 @@ function validarEntradasXML(xmlDom) {
             alert("No se encontró el nodo de Impuestos a nivel de Comprobante");
             return;
         }
-
-        // ==================== PRUEBAS ===============================
-
-
-        const trasladoossss = impuestosDelComprobante.getAttribute("TotalImpuestosTrasladados") || "";
-        console.log(trasladoossss)
-
-
-
 
         const traslados = impuestosDelComprobante.getElementsByTagName("cfdi:Traslados")[0];
         const trasladoGlobal = traslados.getElementsByTagName("cfdi:Traslado")[0];
@@ -392,8 +391,9 @@ function validarEntradasXML(xmlDom) {
 function validarFechaXML(xmlDoc) {
     const comprobante = xmlDoc.getElementsByTagName("cfdi:Comprobante")[0];
     const fechaXML = comprobante.getAttribute("Fecha");
+    const fechaNomina = comprobante.getAttribute("fecha");
     
-    if (!fechaXML) {
+    if (!fechaXML && !fechaNomina) {
         alert("El XML no contiene una fecha válida.");
         return false;
     }
@@ -445,18 +445,17 @@ document.getElementById("procesarXML").onclick = () => {
         
         // Procesar ambos XMLs para anticipo
         procesarXMLsAnticipo(archivoProductos, archivoAplicacion);
-    } else {
+    } else if(tipoSeleccionado === "complemento"  || tipoSeleccionado === "nomina") {
         // Para complemento: validar un solo XML
         const archivo = document.getElementById("xmlFile").files[0];
         if(!archivo){ 
             alert("Sube un XML."); 
             return; 
         }
-        
-        
         // Procesar XML único
         procesarXMLUnico(archivo);
-    }
+    } 
+
 };
 
 // PROCESAR XML ÚNICO (COMPLEMENTO DE PAGO)
@@ -577,7 +576,7 @@ function enviarParaTimbrar(xmlDom){
             alert("Error: Faltan archivos XML para anticipo.");
             return;
         }
-    } else {
+    } else if( tipoSeleccionado === "complemento" || tipoSeleccionado === "nomina") {
         // Para complemento: enviar un XML
         formData.append("xml", xmlBlob, "factura.xml");
         // console.log(xmlBlob)
@@ -607,6 +606,8 @@ function enviarParaTimbrar(xmlDom){
         endpoint = "https://127.0.0.1:5000/timbrar-complemento-pago2"; 
     } else if (tipoSeleccionado === "anticipo") {
         endpoint = "https://127.0.0.1:5000/timbrar-aplicacion-anticipo";
+    } else if(tipoSeleccionado === "nomina"){
+        endpoint = "https://127.0.0.1:5000/timbrar-nomina";
     } else {
         alert("Selecciona un tipo válido.");
         return;
