@@ -22,8 +22,8 @@ from decimal import Decimal
 import ssl
 
 
-app = Flask(__name__)
-CORS(app)
+# app = Flask(__name__)
+# CORS(app)
 # Crear un contexto SSL
 context = ssl.SSLContext(ssl.PROTOCOL_TLS_SERVER)
 context.load_cert_chain(certfile='tm7_combined.pem')  # Certificado + clave combinados
@@ -174,17 +174,18 @@ def timbrar_complemento_pago2():
         guardar_xml(xml_bytes, tipo_comprobante="anticipo")
 
         #timbrar con pac
-        xml_timbrado = timbrar_con_pac(xml_bytes) #bytes solo  es cfdi - listo
+        cfdi_bytes, error_timbrado = timbrar_con_pac(xml_bytes)
 
-        respuesta = generar_xml_timbrado(xml_timbrado)
+        if error_timbrado:
+            return jsonify({
+                "success": False,
+                "error": error_timbrado
+            }), 400
+
+        respuesta = generar_xml_timbrado(cfdi_bytes)
 
         # print(respuesta["xml"]) importante para generar xml
         xml_base64 = base64.b64encode(respuesta["xml"].encode('utf-8')).decode('utf-8')
-
-        # if tipo == "aplicacion":
-        # Leer contenido como bytes
-        # xml_anticipo_bytes = xml_anticipo.read()
-        # xml_filemaker_bytes = xml_filemaker.read()
         
         xml_timbrado_str = respuesta["xml"]
         xml_timbrado_bytes = xml_timbrado_str.encode('utf-8')   
@@ -217,18 +218,33 @@ def parse_xml_complemento(xml_cfdi: str, forma_pago: str) -> dict:
 
     root = ET.fromstring(xml_cfdi)
 
+     # EXTRAER UUID ANTES DE ELIMINAR EL TIMBRE
+    timbre_element = root.find('.//tfd:TimbreFiscalDigital', ns)
+    if timbre_element is not None:
+        uuid_factura = timbre_element.attrib['UUID']
+        # print(f" UUID extraído: {uuid_factura}")
+    else:
+        # print("No se encontró TimbreFiscalDigital en el XML")
+        raise ValueError("No se encontró el UUID de la factura original. El XML debe contener un TimbreFiscalDigital.")
+
+    #  ELIMINAR EL TIMBRE FISCAL (para evitar duplicados al re-timbrar)
+    complemento_nodo = root.find('cfdi:Complemento', ns)
+    if complemento_nodo is not None:
+        timbre_nodo = complemento_nodo.find('tfd:TimbreFiscalDigital', ns)
+        if timbre_nodo is not None:
+            # print(" Eliminando TimbreFiscalDigital existente...")
+            complemento_nodo.remove(timbre_nodo)
+            # Si el Complemento quedó vacío, eliminarlo también
+            if len(complemento_nodo) == 0:
+                root.remove(complemento_nodo)
+                # print(" Nodo Complemento eliminado (estaba vacío)")
+
+
     # Extraer datos del nodo Comprobante
     comprobante = root.attrib
     emisor = root.find('cfdi:Emisor', ns).attrib
     receptor = root.find('cfdi:Receptor', ns).attrib 
-    timbre = root.find('.//tfd:TimbreFiscalDigital', ns).attrib
-
-    ##################################
-    # concepto_nodo = root.find('cfdi:Conceptos', ns)
-    # concepto_interno = concepto_nodo.find('cfdi:Concepto', ns)
-    # concepto_nodo
-
-
+    # timbre = root.find('.//tfd:TimbreFiscalDigital', ns).attrib
 
     # Extraer Impuestos
     impuestos_nodo = root.find('cfdi:Impuestos', ns)
@@ -240,7 +256,7 @@ def parse_xml_complemento(xml_cfdi: str, forma_pago: str) -> dict:
     concepto = conceptos_nodo.find('cfdi:Concepto', ns).attrib
     
     # UUID de la factura original
-    uuid_factura = timbre['UUID']
+    # uuid_factura = timbre['UUID']
     
     # Valores de la factura original - Nodo: Comprobante
     version_factura = comprobante.get('Version')
@@ -261,8 +277,6 @@ def parse_xml_complemento(xml_cfdi: str, forma_pago: str) -> dict:
     # Fecha actual 
     # fecha_actual = datetime.now().strftime('%Y-%m-%dT%H:%M:%S')
     # fecha_actual = "2026-01-08T13:12:50"
-
-
     
     # Calcular valores del pago (asumiendo pago total)
     monto_pago = total_factura
@@ -513,9 +527,15 @@ def timbrar_aplicacion_anticipo():
         guardar_xml(xml_bytes, tipo_comprobante="anticipo")
 
         #timbrar con pac
-        xml_timbrado = timbrar_con_pac(xml_bytes) #bytes solo  es cfdi
+        cfdi_bytes, error_timbrado = timbrar_con_pac(xml_bytes) #bytes solo  es cfdi
 
-        respuesta = generar_xml_timbrado(xml_timbrado)
+        if error_timbrado:
+            return jsonify({
+                "success": False,
+                "error": error_timbrado
+            }), 400
+
+        respuesta = generar_xml_timbrado(cfdi_bytes)
 
         # print(respuesta["xml"]) importante para generar xml
         xml_base64 = base64.b64encode(respuesta["xml"].encode('utf-8')).decode('utf-8')
@@ -662,16 +682,21 @@ def timbrar_nomina():
         # print(xml_sin_sellar)
 
         xml_sellado = sellar_cfdi_complemento(xml_sin_sellar,llave_privada, RUTA_XSLT)
-        print(xml_sellado)
+        # print(xml_sellado)
 
         #transformar xml en stringa bytes
         xml_bytes = xml_sellado.encode("utf-8")
         guardar_xml(xml_bytes, tipo_comprobante="nomina")
 
         #timbrar con pac
-        xml_timbrado = timbrar_con_pac(xml_bytes) #bytes solo  es cfdi - listo
+        cfdi_bytes, error_timbrado = timbrar_con_pac(xml_bytes) #bytes solo  es cfdi - listo
+        if error_timbrado:
+            return jsonify({
+                "success": False,
+                "error": error_timbrado
+            }), 400
 
-        parseo_del_pac = generar_xml_timbrado(xml_timbrado)
+        parseo_del_pac = generar_xml_timbrado(cfdi_bytes)
 
         # print(respuesta["xml"]) importante para generar xml
         
@@ -869,4 +894,4 @@ def timbrar_aplicacion_anticipo_ruta():
 
 
 if __name__ == "__main__":
-    app.run(host='0.0.0.0', debug=True, ssl_context=context)
+    app.run(host='0.0.0.0', port=5001, debug=True, ssl_context=context)

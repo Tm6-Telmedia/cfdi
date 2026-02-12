@@ -64,79 +64,69 @@ def cargar_llave_privada(key_path: str, password):
     
     return private_key
 
-def timbrar_con_pac(xml_bytes: bytes) -> dict:
+def timbrar_con_pac(xml_bytes: bytes):
     """
     Envía un CFDI al PAC (Solución Factible) para timbrar.
-    Recibe el XML sellado (bytes) y regresa dict con uuid y xml_timbrado (base64).
+    Recibe el XML sellado (bytes).
+    Retorna:
+        (cfdi_bytes, None) si es exitoso
+        (None, mensaje_error) si falla
     """
     try:
         client = Client(PAC_WSDL)
         xml_b64 = base64.b64encode(xml_bytes).decode()
-        
+
         result = client.service.timbrar(PAC_USER, PAC_PASSWORD, xml_b64, False)
-        
+
         print(f"RESPUESTA DEL PAC - Status: {result.status}")
-        
+
+        #  ERROR GENERAL DEL PAC
         if result.status != 200:
             mensaje = getattr(result, 'mensaje', 'Error desconocido en el timbrado')
             print(f"ERROR DEL PAC: {mensaje}")
             return None, mensaje
-        
-        # DEBUG: Verificar qué contiene result
-        print(f"DEBUG - Atributos de result: {dir(result)}")
-        print(f"DEBUG - Tiene resultados: {hasattr(result, 'resultados')}")
-        
-        # Verificar que resultados existe y tiene elementos
-        if not hasattr(result, 'resultados') or not result.resultados or len(result.resultados) == 0:
-            # print("DEBUG - No hay resultados en la respuesta del PAC")
+
+        #  Validar que existan resultados
+        if not hasattr(result, 'resultados') or not result.resultados:
             return None, "No se recibieron resultados del PAC"
-        
-        print(f"DEBUG - Número de resultados: {len(result.resultados)}")
+
         primer_resultado = result.resultados[0]
-        print(f"DEBUG - Atributos del primer resultado: {dir(primer_resultado)}")
-        
-        cfdi = primer_resultado.cfdiTimbrado
-        # print(f"DEBUG - cfdiTimbrado es None: {cfdi is None}")
-        # if cfdi:
-            # print(f"DEBUG - Tipo de cfdi: {type(cfdi)}")
-            # print(f"DEBUG - Longitud de cfdi: {len(cfdi) if hasattr(cfdi, '__len__') else 'N/A'}")
-        
-        # Verificar que cfdi no sea None
-        if cfdi is None:
-            if hasattr(primer_resultado, 'mensaje'):
-                print(f"DEBUG - Mensaje del resultado: {primer_resultado.mensaje}")
+
+        #  Si el PAC manda mensaje de error en el resultado
+        if hasattr(primer_resultado, 'mensaje') and primer_resultado.mensaje:
+            if not getattr(primer_resultado, 'cfdiTimbrado', None):
                 return None, f"El PAC retornó vacío: {primer_resultado.mensaje}"
+
+        cfdi = primer_resultado.cfdiTimbrado
+
+        #  CFDI vacío
+        if not cfdi:
             return None, "El PAC retornó un CFDI vacío"
-        
-        # El PAC devuelve el XML directamente como bytes, no en base64
+
+        #  Convertir a bytes correctamente
         if isinstance(cfdi, bytes):
             cfdi_bytes = cfdi
+
         elif isinstance(cfdi, str):
-            # Si es string, verificar si empieza con <?xml (no está en base64)
             if cfdi.strip().startswith('<?xml'):
                 cfdi_bytes = cfdi.encode('utf-8')
             else:
-                # Si no empieza con <?xml, asumir que está en base64
                 try:
                     cfdi_bytes = base64.b64decode(cfdi)
-                except Exception as decode_error:
-                    cfdi_bytes = cfdi.encode('utf-8')
+                except Exception:
+                    return None, "No se pudo decodificar el CFDI retornado por el PAC"
+
         else:
             cfdi_bytes = str(cfdi).encode('utf-8')
-        
-        # print(" TIMBRADO EXITOSO")
-        return cfdi_bytes
-    
+
+        print("TIMBRADO EXITOSO")
+        return cfdi_bytes, None
+
     except Exception as e:
-        print(f" ERROR AL CONECTAR CON EL PAC: {str(e)}")
-        return None, f"Error al conectar con el PAC: {str(e)}"
-        
-    except Exception as e:
-        error_msg = f"Error al timbrar: {str(e)}"
-        print(f" {error_msg}")
-        import traceback
-        traceback.print_exc()
-        return {'error': error_msg}
+        error_msg = f"Error al conectar con el PAC: {str(e)}"
+        print(error_msg)
+        return None, error_msg
+
 
 def generar_xml_timbrado(xml_timbrado: bytes):
     try:

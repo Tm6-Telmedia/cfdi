@@ -1,6 +1,4 @@
-let xmlOriginal = null;
-const inputXMLAplicacion = document.querySelector('#xmlAplicacion');
-// const inputFolio = document.querySelector('#numFolio').value;
+
 
 // VALIDACIONES 
 function validarRFC(rfc) {
@@ -23,6 +21,10 @@ function validarRegimen(reg){
 function validarUsoCFDI(uso){
     return uso.trim() !== "";
 }
+
+let xmlOriginal = null;
+const inputXMLAplicacion = document.querySelector('#xmlAplicacion');
+// const inputFolio = document.querySelector('#numFolio').value;
 
 function validarCFDI(archivoXML) {
     return new Promise((resolve, reject) => {
@@ -460,11 +462,15 @@ document.getElementById("procesarXML").onclick = () => {
 
 // PROCESAR XML ÚNICO (COMPLEMENTO DE PAGO)
 function procesarXMLUnico(archivo) {
+    const tipoSeleccionado = document.getElementById("tipoTimbrado").value;
     const lector = new FileReader();
     lector.onload = e => {
         const parser = new DOMParser();
         const xml = parser.parseFromString(e.target.result, "text/xml");
-        // xmlOriginal = xml;
+        // Solo para nómina asignar directamente
+        if (tipoSeleccionado === "nomina") {
+            xmlOriginal = xml;
+        }
         procesarDatosFaltantes(xml);
     };
     lector.readAsText(archivo);
@@ -603,11 +609,11 @@ function enviarParaTimbrar(xmlDom){
     let endpoint;
     if (tipoSeleccionado === "complemento") {
     // tm7.telmedia.com.mx
-        endpoint = "https://127.0.0.1:5000/timbrar-complemento-pago2"; 
+        endpoint = "https://127.0.0.1:5001/timbrar-complemento-pago2"; 
     } else if (tipoSeleccionado === "anticipo") {
-        endpoint = "https://127.0.0.1:5000/timbrar-aplicacion-anticipo";
+        endpoint = "https://127.0.0.1:5001/timbrar-aplicacion-anticipo";
     } else if(tipoSeleccionado === "nomina"){
-        endpoint = "https://127.0.0.1:5000/timbrar-nomina";
+        endpoint = "https://127.0.0.1:5001/timbrar-nomina";
     } else {
         alert("Selecciona un tipo válido.");
         return;
@@ -617,11 +623,19 @@ function enviarParaTimbrar(xmlDom){
         method:"POST",
         body:formData
     })
-    .then(r=>r.json())
-    .then(data=>{
-        // Verificar si hay error
-        if(!data.success || data.error){
-            alert("Error del servidor: " + (data.error || "Error desconocido"));
+    .then(r => {
+        // Verificar si el servidor respondió con error HTTP
+        if (!r.ok) {
+            return r.json().then(data => {
+                throw new Error(data.error || `Error del servidor (${r.status})`);
+            });
+        }
+        return r.json();
+    })
+    .then(data => {
+        // Verificar si hay error en la respuesta JSON
+        if (!data.success) {
+            alert(" Error al timbrar:\n\n" + (data.error || "Error desconocido"));
             return;
         }
 
