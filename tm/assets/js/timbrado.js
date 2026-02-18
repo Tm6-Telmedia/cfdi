@@ -1,4 +1,6 @@
 
+let xmlOriginal = null;
+const inputXMLAplicacion = document.querySelector('#xmlAplicacion');
 
 // VALIDACIONES 
 function validarRFC(rfc) {
@@ -22,10 +24,6 @@ function validarUsoCFDI(uso){
     return uso.trim() !== "";
 }
 
-let xmlOriginal = null;
-const inputXMLAplicacion = document.querySelector('#xmlAplicacion');
-// const inputFolio = document.querySelector('#numFolio').value;
-
 function validarCFDI(archivoXML) {
     return new Promise((resolve, reject) => {
         const reader = new FileReader();
@@ -34,30 +32,22 @@ function validarCFDI(archivoXML) {
             const contenido = e.target.result;
             
             try {
-                // Parsear XML
                 const parser = new DOMParser();
                 const xmlDoc = parser.parseFromString(contenido, "text/xml");
                 
-                // Verificar errores de parseo
                 const parseError = xmlDoc.querySelector('parsererror');
                 if (parseError) {
-                    reject({
-                        valido: false,
-                        errores: ['El XML tiene errores de sintaxis']
-                    });
+                    reject({ valido: false, errores: ['El XML tiene errores de sintaxis'] });
                     return;
                 }
                 
-                // Array para almacenar errores
                 const errores = [];
                 const advertencias = [];
                 
-                // 1. Validar UUID (debe existir y no estar vacío)
                 const timbre = xmlDoc.querySelector('TimbreFiscalDigital, tfd\\:TimbreFiscalDigital');
                 if (timbre) {
                     const uuid = timbre.getAttribute('UUID');
                     const regexUUID = /^[A-F0-9]{8}-[A-F0-9]{4}-[A-F0-9]{4}-[A-F0-9]{4}-[A-F0-9]{12}$/i;
-                    
                     if (!uuid || uuid.trim() === '') {
                         errores.push('El UUID está vacío. Debe contener un identificador válido antes de timbrar.');
                     } else if (!regexUUID.test(uuid)) {
@@ -67,35 +57,27 @@ function validarCFDI(archivoXML) {
                     advertencias.push('No se encontró el nodo TimbreFiscalDigital. Se agregará al timbrar.');
                 }
                 
-                // 2. Validar Conceptos
                 const conceptos = xmlDoc.querySelectorAll('Concepto, cfdi\\:Concepto');
-                
                 if (conceptos.length === 0) {
                     errores.push('No se encontraron conceptos en el CFDI');
                 } else {
-                    conceptos.forEach((concepto, index) => {
-                        // 2.1 Validar ClaveProdServ (8 dígitos numéricos)
+                    conceptos.forEach((concepto) => {
                         const claveProdServ = concepto.getAttribute('ClaveProdServ');
                         const regexClave = /^\d{8}$/;
-                        
                         if (!claveProdServ) {
                             errores.push('Falta el atributo ClaveProdServ');
                         } else if (!regexClave.test(claveProdServ)) {
                             errores.push('ClaveProdServ con formato incorrecto');
                         }
                         
-                        // 2.2 Validar ClaveUnidad (debe ser "ACT")
                         const claveUnidad = concepto.getAttribute('ClaveUnidad');
-                        
                         if (!claveUnidad) {
                             errores.push('Falta el atributo ClaveUnidad');
                         } else if (claveUnidad !== 'ACT') {
                             errores.push('ClaveUnidad con formato incorrecto');
                         }
                         
-                        // 2.3 Validar Descripción (debe contener la palabra "Anticipo")
                         const descripcion = concepto.getAttribute('Descripcion');
-                        
                         if (!descripcion) {
                             errores.push('Falta el atributo Descripcion');
                         } else if (!descripcion.toLowerCase().includes('anticipo')) {
@@ -104,7 +86,6 @@ function validarCFDI(archivoXML) {
                     });
                 }
 
-                // RFC Emisor
                 const emisor = xmlDoc.querySelector('Emisor, cfdi\\:Emisor');
                 if (emisor) {
                     const rfcEmisor = emisor.getAttribute('Rfc');
@@ -114,7 +95,6 @@ function validarCFDI(archivoXML) {
                     }
                 }
                 
-                // RFC Receptor
                 const receptor = xmlDoc.querySelector('Receptor, cfdi\\:Receptor');
                 if (receptor) {
                     const rfcReceptor = receptor.getAttribute('Rfc');
@@ -124,122 +104,126 @@ function validarCFDI(archivoXML) {
                     }
                 }
                 
-                // Resultado final
                 if (errores.length === 0) {
-                    resolve({
-                        valido: true,
-                        mensaje: 'XML válido para timbrar',
-                        advertencias: advertencias,
-                        xml: contenido,
-                        xmlDoc: xmlDoc
-                    });
+                    resolve({ valido: true, mensaje: 'XML válido para timbrar', advertencias, xml: contenido, xmlDoc });
                 } else {
-                    reject({
-                        valido: false,
-                        errores: errores,
-                        advertencias: advertencias
-                    });
+                    reject({ valido: false, errores, advertencias });
                 }
                 
             } catch (error) {
-                reject({
-                    valido: false,
-                    errores: [`Error al procesar el XML: ${error.message}`]
-                });
+                reject({ valido: false, errores: [`Error al procesar el XML: ${error.message}`] });
             }
         };
         
-        reader.onerror = () => {
-            reject({
-                valido: false,
-                errores: ['Error al leer el archivo']
-            });
-        };
-        
+        reader.onerror = () => reject({ valido: false, errores: ['Error al leer el archivo'] });
         reader.readAsText(archivoXML);
     });
 }
 
 function validarFolio(folio) {
     folio.trim();
-    if ( folio === '') {
+    if (folio === '') {
         alert('El folio no puede tener espacios en blanco');
-        if (folio.length < 4 || folio.length > 4 ) {
-            alert('El folio debe ser de 4 digitos')
-        } 
-        return
+        if (folio.length < 4 || folio.length > 4) {
+            alert('El folio debe ser de 4 digitos');
+        }
+        return;
     }
 }
 
 
-// MOSTRAR/OCULTAR FORMA DE PAGO Y SECCIONES XML SEGÚN TIPO SELECCIONADO
-document.getElementById("tipoTimbrado").onchange = function() {
-    const tipoSeleccionado = this.value;
-    const formaPagoSection = document.getElementById("formaPagoSection");
-    const formaPagoSelect = document.getElementById("formaPago");
-    
+// =====================================================
+// MOSTRAR/OCULTAR SECCIONES SEGÚN TIPO SELECCIONADO
+// =====================================================
+function actualizarSecciones(tipoSeleccionado) {
+    const formaPagoSection   = document.getElementById("formaPagoSection");
+    const formaPagoSelect    = document.getElementById("formaPago");
+    const cancelacionSection = document.getElementById("cancelacionSection");
+    const motivoCancelacion  = document.getElementById("motivoCancelacion");
+    const subirXMLSection    = document.getElementById("subirXMLSection");
+    const xmlUnicoSection    = document.getElementById("xmlUnicoSection");
+    const xmlAnticipoSection = document.getElementById("xmlAnticipoSection");
+    const btnContinuar       = document.getElementById("btnContinuarTimbrado");
+
+    // Resetear TODO al cambiar de tipo
+    formaPagoSection.classList.add("hidden");
+    formaPagoSelect.required = false;
+    cancelacionSection.classList.add("hidden");
+    motivoCancelacion.required = false;
+    subirXMLSection.classList.add("hidden");
+    xmlUnicoSection.classList.add("hidden");
+    xmlAnticipoSection.classList.add("hidden");
+    btnContinuar.classList.remove("hidden"); // Volver a mostrar el botón Continuar
+
     if (tipoSeleccionado === "complemento") {
-        // Mostrar forma de pago para complemento de pago
         formaPagoSection.classList.remove("hidden");
         formaPagoSelect.required = true;
     } else if (tipoSeleccionado === "anticipo") {
-        // Ocultar forma de pago para aplicación de anticipo
-        formaPagoSection.classList.add("hidden");
-        formaPagoSelect.required = false;
-        formaPagoSelect.value = "99"; // Valor fijo para anticipo (Por definir)
+        formaPagoSelect.value = "99";
+    } else if (tipoSeleccionado === "cancelar") {
+        cancelacionSection.classList.remove("hidden");
+        motivoCancelacion.required = true;
     }
+}
+
+document.getElementById("tipoTimbrado").onchange = function() {
+    actualizarSecciones(this.value);
 };
 
-//CONTINUAR 
+// Ejecutar al cargar la página por si el navegador restauró
+// un valor previo en el select (problema del estado al recargar)
+document.addEventListener("DOMContentLoaded", () => {
+    const tipoSeleccionado = document.getElementById("tipoTimbrado").value;
+    if (tipoSeleccionado) {
+        actualizarSecciones(tipoSeleccionado);
+    }
+});
+
+
+// CONTINUAR
 document.getElementById("btnContinuarTimbrado").onclick = () => {
     const tipoSeleccionado = document.getElementById("tipoTimbrado").value;
     
-    if(!tipoSeleccionado){
+    if (!tipoSeleccionado) {
         alert("Selecciona un tipo.");
         return;
     }
     
-    // Solo validar forma de pago si es complemento de pago
-    if(tipoSeleccionado === "complemento" && !document.getElementById("formaPago").value){
+    if (tipoSeleccionado === "complemento" && !document.getElementById("formaPago").value) {
         alert("Selecciona una forma de pago.");
         return;
     }
     
-    // Mostrar sección de subir XML
     document.getElementById("subirXMLSection").classList.remove("hidden");
     
-    // Mostrar/ocultar secciones según el tipo
-    const xmlUnicoSection = document.getElementById("xmlUnicoSection");
+    const xmlUnicoSection   = document.getElementById("xmlUnicoSection");
     const xmlAnticipoSection = document.getElementById("xmlAnticipoSection");
     
     if (tipoSeleccionado === "anticipo") {
-        // Para anticipo: mostrar sección de dos XMLs
         xmlUnicoSection.classList.add("hidden");
         xmlAnticipoSection.classList.remove("hidden");
-        document.querySelector('#btnContinuarTimbrado').classList.add('hidden')
     } else {
-        // Para complemento: mostrar sección de un XML
         xmlUnicoSection.classList.remove("hidden");
         xmlAnticipoSection.classList.add("hidden");
-        document.querySelector('#btnContinuarTimbrado').classList.add('hidden')
     }
 
-    if(tipoSeleccionado === "nomina") {
-        // para nomina solo es un xml
+    if (tipoSeleccionado === "nomina") {
         xmlUnicoSection.classList.remove("hidden");
         xmlAnticipoSection.classList.add("hidden");
-        document.querySelector('#btnContinuarTimbrado').classList.add('hidden')
     }
+
+    document.querySelector('#btnContinuarTimbrado').classList.add('hidden');
 };
+
 
 // MOSTRAR NOMBRE DEL ARCHIVO
 document.getElementById("xmlFile").onchange = function() {
     const tipoSeleccionado = document.getElementById("tipoTimbrado").value;
     const archivo = this.files[0];
     const fileNameDiv = document.getElementById("fileName");
-    if(archivo) {
+    if (archivo) {
         fileNameDiv.textContent = archivo.name;
-        if(tipoSeleccionado === "complemento")validarEntradasXML(archivo);
+        if (tipoSeleccionado === "complemento") validarEntradasXML(archivo);
     } else {
         fileNameDiv.textContent = "";
     }
@@ -249,18 +233,17 @@ document.getElementById("xmlFile").onchange = function() {
 document.getElementById("xmlProductos").onchange = function() {
     const archivo = this.files[0];
     const fileNameDiv = document.getElementById("fileNameProductos");
-     
-    if(archivo) {
+    if (archivo) {
         fileNameDiv.textContent = archivo.name;
-         validarCFDI(archivo)
-        .then(res => {
-            alert("CFDI válido\n\n" + res.mensaje);
-            inputXMLAplicacion.disabled = false;
-        })
-        .catch(err => {
-            alert("CFDI inválido\n\n" + err.errores.join("\n"));
-            fileNameDiv.textContent = "";
-        })
+        validarCFDI(archivo)
+            .then(res => {
+                alert("CFDI válido\n\n" + res.mensaje);
+                inputXMLAplicacion.disabled = false;
+            })
+            .catch(err => {
+                alert("CFDI inválido\n\n" + err.errores.join("\n"));
+                fileNameDiv.textContent = "";
+            });
     } else {
         fileNameDiv.textContent = "";
     }
@@ -269,8 +252,7 @@ document.getElementById("xmlProductos").onchange = function() {
 document.getElementById("xmlAplicacion").onchange = function() {
     const archivo = this.files[0];
     const fileNameDiv = document.getElementById("fileNameAplicacion");
-    
-    if(archivo) {
+    if (archivo) {
         fileNameDiv.textContent = archivo.name;
     } else {
         fileNameDiv.textContent = "";
@@ -281,18 +263,14 @@ document.getElementById("xmlAplicacion").onchange = function() {
 function validarEntradasXML(xmlDom) {
     const reader = new FileReader();
 
-    reader.onload = function (e) {
+    reader.onload = function(e) {
         const xmlString = e.target.result;
         const parser = new DOMParser();
         const xmlDoc = parser.parseFromString(xmlString, "text/xml");
         
-        // IMPORTANTE: Guardar el XML parseado en xmlOriginal
         xmlOriginal = xmlDoc;
 
-        // Leer etiquetas A NIVEL DE COMPROBANTE
         const comprobante = xmlDoc.getElementsByTagName("cfdi:Comprobante")[0];
-        // const ImpuestosComprobante = comprobante.getElementsByTagName("cfdi:Impuestos")[0];
-
 
         const impuestosDelComprobante = Array.from(comprobante.children).find(
             child => child.tagName === 'cfdi:Impuestos'
@@ -309,41 +287,31 @@ function validarEntradasXML(xmlDom) {
         const folio = comprobante.getAttribute("Folio") || "";
         const fechaOriginal = comprobante.getAttribute("Fecha") || "";
         const base = trasladoGlobal.getAttribute("Base") || "";
-        console.log(base)
+        console.log(base);
         const importe = trasladoGlobal.getAttribute("Importe") || "";
 
         const section = document.querySelector('#xmlUnicoSection');
 
-        // ========== FECHA Y HORA ==========
+        // FECHA Y HORA
         const lbFecha = document.createElement('label');
+        lbFecha.classList.add('campo-label');
         lbFecha.textContent = 'Fecha y Hora:';
-        
-        // Convertir formato XML a formato datetime-local
-        // De: "2026-01-08T13:12:50" a "2026-01-08T13:12"
-        let fechaParaInput = fechaOriginal;
-        if (fechaOriginal) {
-            fechaParaInput = fechaOriginal.substring(0, 16); // Quitar los segundos
-        }
-        
+        let fechaParaInput = fechaOriginal ? fechaOriginal.substring(0, 16) : "";
         const entradaFecha = document.createElement('input');
         entradaFecha.classList.add('entradas');
         entradaFecha.type = 'datetime-local';
         entradaFecha.value = fechaParaInput;
-        
         section.appendChild(lbFecha);
         section.appendChild(entradaFecha);
-        
         entradaFecha.addEventListener('input', () => {
-            // Convertir formato datetime-local a formato XML
-            // De: "2026-01-08T13:12" a "2026-01-08T13:12:50"
             if (entradaFecha.value) {
-                const fechaFormateada = entradaFecha.value + ":00"; // Agregar segundos
-                comprobante.setAttribute("Fecha", fechaFormateada);
+                comprobante.setAttribute("Fecha", entradaFecha.value + ":00");
             }
         });
 
-        // ========== FOLIO ==========
+        // FOLIO
         const lbFolio = document.createElement('label');
+        lbFolio.classList.add('campo-label');
         lbFolio.textContent = 'Folio:';
         const entradaFolio = document.createElement('input');
         entradaFolio.classList.add('entradas');
@@ -351,13 +319,13 @@ function validarEntradasXML(xmlDom) {
         entradaFolio.value = folio;
         section.appendChild(lbFolio);
         section.appendChild(entradaFolio);
-        
         entradaFolio.addEventListener('input', () => {
             comprobante.setAttribute("Folio", entradaFolio.value);
         });
 
-        // ========== BASE ==========
+        // BASE
         const lbBase = document.createElement('label');
+        lbBase.classList.add('campo-label');
         lbBase.textContent = 'Base:';
         const entradaBase = document.createElement('input');
         entradaBase.classList.add('entradas');
@@ -365,13 +333,13 @@ function validarEntradasXML(xmlDom) {
         entradaBase.value = base;
         section.appendChild(lbBase);
         section.appendChild(entradaBase);
-
         entradaBase.addEventListener('input', () => {
             trasladoGlobal.setAttribute("Base", entradaBase.value);
         });
 
-        // ========== IMPORTE ==========
+        // IMPORTE
         const lbImporte = document.createElement('label');
+        lbImporte.classList.add('campo-label');
         lbImporte.textContent = 'Importe:';
         const entradaImporte = document.createElement('input');
         entradaImporte.classList.add('entradas');
@@ -379,17 +347,15 @@ function validarEntradasXML(xmlDom) {
         entradaImporte.value = importe;
         section.appendChild(lbImporte);
         section.appendChild(entradaImporte);
-
         entradaImporte.addEventListener('input', () => {
             trasladoGlobal.setAttribute("Importe", entradaImporte.value);
         });
-    }
+    };
     
     reader.readAsText(xmlDom);
 }
 
 
-// Función para validar que la fecha no exceda 72 horas
 function validarFechaXML(xmlDoc) {
     const comprobante = xmlDoc.getElementsByTagName("cfdi:Comprobante")[0];
     const fechaXML = comprobante.getAttribute("Fecha");
@@ -400,74 +366,47 @@ function validarFechaXML(xmlDoc) {
         return false;
     }
     
-    // Convertir la fecha del XML a objeto Date
     const fechaComprobante = new Date(fechaXML);
-    
     if (isNaN(fechaComprobante.getTime())) {
         alert("La fecha en el XML tiene un formato inválido.");
         return false;
     }
     
-    // Calcular diferencia con la fecha actual
     const ahora = new Date();
-    const maxPermitida = new Date(ahora.getTime() + (72 * 60 * 60 * 1000)); // 72 horas desde ahora
-    
+    const maxPermitida = new Date(ahora.getTime() + (72 * 60 * 60 * 1000));
     if (fechaComprobante > maxPermitida) {
         alert("Error: La fecha del comprobante no puede ser mayor a 72 horas desde ahora.\n\nFecha en el XML: " + fechaXML + "\nFecha máxima permitida: " + maxPermitida.toISOString());
         return false;
     }
     
-    // Opcional: validar que no sea una fecha muy antigua (más de 72 horas en el pasado)
-    // const minPermitida = new Date(ahora.getTime() - (72 * 60 * 60 * 1000));
-    // if (fechaComprobante < minPermitida) {
-    //     alert("Advertencia: La fecha del comprobante es muy antigua (más de 72 horas de retraso).\n\nFecha en el XML: " + fechaXML);
-    //     return false; // Descomenta si quieres que sea un error
-    // }
-    
     return true;
 }
 
-// PROCESAR XML 
+
+// PROCESAR XML
 document.getElementById("procesarXML").onclick = () => {
     const tipoSeleccionado = document.getElementById("tipoTimbrado").value;
     
     if (tipoSeleccionado === "anticipo") {
-        // Para anticipo: validar que se hayan subido ambos XMLs
-        const archivoProductos = document.getElementById("xmlProductos").files[0];
+        const archivoProductos  = document.getElementById("xmlProductos").files[0];
         const archivoAplicacion = document.getElementById("xmlAplicacion").files[0];
-        
-        if(!archivoProductos){ 
-            alert("Sube el Primer XML."); 
-            return; 
-        }
-        if(!archivoAplicacion){ 
-            alert("Sube el Segundo XML."); 
-            return; 
-        }
-        
-        // Procesar ambos XMLs para anticipo
+        if (!archivoProductos)  { alert("Sube el Primer XML.");  return; }
+        if (!archivoAplicacion) { alert("Sube el Segundo XML."); return; }
         procesarXMLsAnticipo(archivoProductos, archivoAplicacion);
-    } else if(tipoSeleccionado === "complemento"  || tipoSeleccionado === "nomina") {
-        // Para complemento: validar un solo XML
+    } else if (tipoSeleccionado === "complemento" || tipoSeleccionado === "nomina") {
         const archivo = document.getElementById("xmlFile").files[0];
-        if(!archivo){ 
-            alert("Sube un XML."); 
-            return; 
-        }
-        // Procesar XML único
+        if (!archivo) { alert("Sube un XML."); return; }
         procesarXMLUnico(archivo);
-    } 
-
+    }
 };
 
-// PROCESAR XML ÚNICO (COMPLEMENTO DE PAGO)
+
 function procesarXMLUnico(archivo) {
     const tipoSeleccionado = document.getElementById("tipoTimbrado").value;
     const lector = new FileReader();
     lector.onload = e => {
         const parser = new DOMParser();
         const xml = parser.parseFromString(e.target.result, "text/xml");
-        // Solo para nómina asignar directamente
         if (tipoSeleccionado === "nomina") {
             xmlOriginal = xml;
         }
@@ -476,37 +415,30 @@ function procesarXMLUnico(archivo) {
     lector.readAsText(archivo);
 }
 
-// PROCESAR XMLs DE ANTICIPO
+
 function procesarXMLsAnticipo(archivoProductos, archivoAplicacion) {
-    let xmlProductos = null;
+    let xmlProductos  = null;
     let xmlAplicacion = null;
     let procesados = 0;
     
-    // Leer XML de productos
     const lectorProductos = new FileReader();
     lectorProductos.onload = e => {
         const parser = new DOMParser();
         xmlProductos = parser.parseFromString(e.target.result, "text/xml");
         procesados++;
-        
         if (procesados === 2) {
-            // Ambos XMLs procesados, usar el de productos como principal
             xmlOriginal = xmlProductos;
             procesarDatosFaltantes(xmlProductos);
         }
     };
     lectorProductos.readAsText(archivoProductos);
     
-    
-    // Leer XML de aplicación
     const lectorAplicacion = new FileReader();
     lectorAplicacion.onload = e => {
         const parser = new DOMParser();
         xmlAplicacion = parser.parseFromString(e.target.result, "text/xml");
         procesados++;
-        
         if (procesados === 2) {
-            // Ambos XMLs procesados, usar el de productos como principal
             xmlOriginal = xmlProductos;
             procesarDatosFaltantes(xmlProductos);
         }
@@ -514,48 +446,34 @@ function procesarXMLsAnticipo(archivoProductos, archivoAplicacion) {
     lectorAplicacion.readAsText(archivoAplicacion);
 }
 
-// PROCESAR DATOS FALTANTES (COMÚN PARA AMBOS TIPOS)
+
 function procesarDatosFaltantes(xml) {
     let faltan = [];
     const todosElementos = xml.getElementsByTagName("*");
     
-    for(let el of todosElementos){
-        for(let attr of el.attributes){
+    for (let el of todosElementos) {
+        for (let attr of el.attributes) {
             let esPlantilla = attr.value.includes("{{");
             let esVacio = attr.value.trim() === "";
-            let sinComillas = (
-                esVacio &&
-                !el.outerHTML.includes(attr.name + "=\"")
-            );
-            
-            if(esPlantilla || esVacio || sinComillas){
-                faltan.push({
-                    elemento: el,
-                    attr: attr.name,
-                    valor: attr.value
-                });
+            let sinComillas = esVacio && !el.outerHTML.includes(attr.name + "=\"");
+            if (esPlantilla || esVacio || sinComillas) {
+                faltan.push({ elemento: el, attr: attr.name, valor: attr.value });
             }
         }
     }
     
-    // Primero validar la fecha
     if (xmlOriginal && !validarFechaXML(xmlOriginal)) {
-        return; // Detener si la fecha no es válida
-    } else if(faltan.length === 0){
+        return;
+    } else if (faltan.length === 0) {
         alert("XML COMPLETO: Enviado a timbrar.");
         enviarParaTimbrar(xmlOriginal);
-        // console.log(xmlOriginal);
         return;
     }
     
-    // Si no hay campos faltantes, enviar a timbrar
-    
-    
-    // Si hay campos faltantes, mostrar formulario
     let html = "";
     faltan.forEach(f => {
-        html += `<label>${f.attr}</label>
-     <input type="text" data-campo="${f.attr}" value="">`;
+        html += `<label class="campo-label">${f.attr}</label>
+     <input type="text" class="entrada-texto" data-campo="${f.attr}" value="">`;
     });
     
     document.getElementById("faltantesCampos").innerHTML = html;

@@ -1,26 +1,23 @@
 <!DOCTYPE html>
 <html lang="es">
-
 <head>
     <meta charset="UTF-8">
     <title>TIMBRADO</title>
     <link rel="stylesheet" href="tm/assets/css/timbrado.css">
 </head>
-
 <body>
     <div class="contenedor">
-        <h2>TIMBRADO</h2>
-
-        <label>Selecciona tipo:</label>
+        <h2 class="titulo-principal">TIMBRADO</h2>
+        <label class="campo-label">Selecciona tipo:</label>
         <select id="tipoTimbrado" class="placeholder" required>
             <option value="" disabled >-- Selecciona tipo --</option>
             <option value="anticipo">Aplicación de Anticipo</option>
             <option value="complemento">Complemento de Pago</option>
             <option value="nomina">De nomina</option>
+            <option value="cancelar">Cancelar factura </option>
         </select>
-
         <div id="formaPagoSection" class="hidden">
-            <label>Forma de pago:</label>
+            <label class="campo-label">Forma de pago:</label>
             <select id="formaPago" class="placeholder" required>
                 <option value="" disabled selected hidden>Selecciona forma de pago...</option>
                 <option value="02">02: Cheque nominativo</option>
@@ -30,43 +27,45 @@
                 <option value="99">99: Por definir (usualmente con PPD)</option>
             </select>
         </div>
-
-        <button id="btnContinuarTimbrado">Continuar</button>
-
+        <div id="cancelacionSection" class="hidden">
+            <label class="campo-label">Motivos de cancelacion:</label>
+            <select id="motivoCancelacion" class="placeholder" required>
+                <option value="" disabled selected hidden>Selecciona un motivo de cancelacion...</option>
+                <option value="01">01: Comprobante emitido con errores con relación.</option>
+                <option value="02">02: Comprobante emitido con errores sin relación.</option>
+                <option value="03">03: No se llevó a cabo la operación.</option>
+                <option value="04">04: Operación nominativa relacionada en una factura global.</option>
+            </select>
+        </div>
+        <button id="btnContinuarTimbrado" class="btn-accion">Continuar</button>
         <div id="subirXMLSection" class="hidden">
             <div id="xmlUnicoSection">
-                <label><b>Subir factura (XML):</b></label>
+                <label class="campo-label"><b>Subir factura (XML):</b></label>
                 <div class="file-input-wrapper">
                     <input type="file" id="xmlFile" accept=".xml" class="file-input-hidden">
                     <label for="xmlFile" class="file-input-custom">Seleccionar archivo</label>
                 </div>
                 <div id="fileName" class="file-name"></div>
-                <!-- <input id="numFolio" class="numFolio" type="text" inputmode="numeric" pattern="[0-9]*" maxlength="4" placeholder="Eje: 2093"> -->
             </div>
-
             <div id="xmlAnticipoSection" class="hidden">
-                <label><b>Subir Primer XML:</b></label>
+                <label class="campo-label"><b>Subir Primer XML:</b></label>
                 <div class="file-input-wrapper">
                     <input type="file" id="xmlProductos" accept=".xml" class="file-input-hidden">
                     <label for="xmlProductos" class="file-input-custom">Seleccionar Primer XML</label>
                     <div id="fileNameProductos" class="file-name"></div>
                 </div>
-
                 <div id="segundoXML">
-                     <label><b>Subir Segundo XML:</b></label>
+                    <label class="campo-label"><b>Subir Segundo XML:</b></label>
                     <div class="file-input-wrapper">
                         <input type="file" id="xmlAplicacion" accept=".xml" class="file-input-hidden" disabled>
                         <label for="xmlAplicacion" class="file-input-custom">Seleccionar Segundo XML</label>
                     </div>
                 </div>
-               
                 <div id="fileNameAplicacion" class="file-name"></div>
             </div>
-
-            <button id="procesarXML">SELLAR Y TIMBRAR</button>
+            <button id="procesarXML" class="btn-accion">SELLAR Y TIMBRAR</button>
         </div>
     </div>
-
     <script src="tm/assets/js/timbrado.js"></script>
 </body>
 </html>
