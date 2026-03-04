@@ -11,20 +11,16 @@ from cryptography import x509
 import base64
 import pytz
 
+'''
+para produccion cambiar PAC_WSDL, PAC_USER  y PAC_PASSWORD
+'''
 
-BASE_DIR = os.path.dirname(os.path.abspath(__file__))
-
-RUTA_CER = os.path.join(BASE_DIR, "CSD_Sucursal_1_EKU9003173C9_20230517_223850.cer")
-RUTA_KEY = os.path.join(BASE_DIR, "CSD_Sucursal_1_EKU9003173C9_20230517_223850.key")
-PASSWORD_KEY = b"12345678a"  
-
-RUTA_XSLT = r"xslt\cadenaoriginal_4_0.xslt"
-
+# Configuración del PAC modo test
 PAC_WSDL = "https://testing.solucionfactible.com/ws/services/Timbrado?wsdl"
 PAC_USER = "testing@solucionfactible.com"
-
-PAC_WSDL_CANCELAR = "https://testing.solucionfactible.com/ws/services/Cancelacion?wsdl"
 PAC_PASSWORD = "timbrado.SF.16672"
+
+# PAC_WSDL_CANCELAR = "https://testing.solucionfactible.com/ws/services/Cancelacion?wsdl"
 
 
 

@@ -22,20 +22,29 @@ import ssl
 import re
 import zlib
 
+'''
+para produccion cambiar en este archivo la ruta del certificado, key y el password de la key
+'''
 
-# app = Flask(__name__)
-# CORS(app)
 # Crear un contexto SSL
 context = ssl.SSLContext(ssl.PROTOCOL_TLS_SERVER)
 context.load_cert_chain(certfile='tm7_combined.pem')  # Certificado + clave combinados
+
+# CONFIGURACIÓN GENERAL modo test
+RUTA_CER = r"CSD_Sucursal_1_EKU9003173C9_20230517_223850.cer"
+RUTA_KEY = r"CSD_Sucursal_1_EKU9003173C9_20230517_223850.key"
+PASSWORD_KEY = b"12345678a"
+RUTA_XSLT = r"xslt\cadenaoriginal_4_0.xslt"
+SALIDA_DIR = r"TimbradoSalida"
+
 app = Flask(__name__)
 CORS(app)
+
 # Importar funciones necesarias de PDF.py
 from PDF import (
     generar_pdf_factura, PDFGenerationError, 
     ConceptoCFDI, extraer_conceptos_filemaker
 )
-
 
 from cfdi_service import (
     cargar_certificado,
@@ -48,38 +57,14 @@ from cfdi_service import (
     cancelar_cfdi_con_pac
 )
 
-# BASE_DIR = os.path.dirname(os.path.abspath(__file__))
-# RUTA_CER = os.path.join(BASE_DIR, "CSD_Sucursal_1_EKU9003173C9_20230517_223850.cer")
-# RUTA_KEY = os.path.join(BASE_DIR, "CSD_Sucursal_1_EKU9003173C9_20230517_223850.key")
-# PASSWORD_KEY = b"12345678a"  
-
-RUTA_XSLT = r"xslt\cadenaoriginal_4_0.xslt"
+# RUTA_XSLT = r"xslt\cadenaoriginal_4_0.xslt"
 RUTA_CFDI_XSD = r"xsd\cfdv40.xsd"
 RUTA_NOMINA_XSD = r"xsd\nomina12.xsd"
 
-# Constantes globales
-FILEMAKER_NAMESPACE = "http://www.filemaker.com/fmpdsoresult"
-
-# CONSTANTES GLOBALES
-CFDI_NS = "http://www.sat.gob.mx/cfd/4"
-PAGO_NS = "http://www.sat.gob.mx/Pagos20"
-TFD_NS = "http://www.sat.gob.mx/TimbreFiscalDigital"
 
 #eliminar
 app = Flask(__name__)
 CORS(app)
-
-# CONFIGURACIÓN GENERAL modo test
-RUTA_CER = r"CSD_Sucursal_1_EKU9003173C9_20230517_223850.cer"
-RUTA_KEY = r"CSD_Sucursal_1_EKU9003173C9_20230517_223850.key"
-RUTA_XSLT = r"xslt\cadenaoriginal_4_0.xslt"
-SALIDA_DIR = r"TimbradoSalida"
-PASSWORD_KEY = b"12345678a"
-
-# Configuración del PAC modo test
-usuario = "testing@solucionfactible.com"
-contrasena = "timbrado.SF.16672"
-wsdl_url = "https://testing.solucionfactible.com/ws/services/Timbrado?wsdl"
 
 
 def guardar_xml(xml_bytes, tipo_comprobante):
