@@ -49,6 +49,9 @@ body {
     position: absolute;
     left: -9999px;
 }
+.file-input {
+    width: 350px;
+}
 .file-name {
     margin-top: 10px;
     font-style: italic;

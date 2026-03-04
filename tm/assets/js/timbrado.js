@@ -1,29 +1,11 @@
 
 let xmlOriginal = null;
 const inputXMLAplicacion = document.querySelector('#xmlAplicacion');
+function getTipo() {
+    return document.getElementById("tipoTimbrado").value;
+}
 
 // VALIDACIONES 
-function validarRFC(rfc) {
-    const regex = /^([A-ZÑ&]{3,4})(\d{6})([A-Z0-9]{3})$/i;
-    return regex.test(rfc);
-}
-
-function validarNombre(nom){
-    return nom.trim().length > 0;
-}
-
-function validarCP(cp){
-    return /^[0-9]{5}$/.test(cp);
-}
-
-function validarRegimen(reg){
-    return /^[0-9]{3}$/.test(reg);
-}
-
-function validarUsoCFDI(uso){
-    return uso.trim() !== "";
-}
-
 function validarCFDI(archivoXML) {
     return new Promise((resolve, reject) => {
         const reader = new FileReader();
@@ -120,17 +102,6 @@ function validarCFDI(archivoXML) {
     });
 }
 
-function validarFolio(folio) {
-    folio.trim();
-    if (folio === '') {
-        alert('El folio no puede tener espacios en blanco');
-        if (folio.length < 4 || folio.length > 4) {
-            alert('El folio debe ser de 4 digitos');
-        }
-        return;
-    }
-}
-
 
 // =====================================================
 // MOSTRAR/OCULTAR SECCIONES SEGÚN TIPO SELECCIONADO
@@ -144,6 +115,8 @@ function actualizarSecciones(tipoSeleccionado) {
     const xmlUnicoSection    = document.getElementById("xmlUnicoSection");
     const xmlAnticipoSection = document.getElementById("xmlAnticipoSection");
     const btnContinuar       = document.getElementById("btnContinuarTimbrado");
+    // const btnContinuarTimbrado = document.getElementById("procesarXML");
+    const btnCancelarFactura = document.getElementById("cancelarCFDI");
 
     // Resetear TODO al cambiar de tipo
     formaPagoSection.classList.add("hidden");
@@ -153,7 +126,11 @@ function actualizarSecciones(tipoSeleccionado) {
     subirXMLSection.classList.add("hidden");
     xmlUnicoSection.classList.add("hidden");
     xmlAnticipoSection.classList.add("hidden");
+    
     btnContinuar.classList.remove("hidden"); // Volver a mostrar el botón Continuar
+
+    btnCancelarFactura.classList.add("hidden");
+
 
     if (tipoSeleccionado === "complemento") {
         formaPagoSection.classList.remove("hidden");
@@ -162,6 +139,9 @@ function actualizarSecciones(tipoSeleccionado) {
         formaPagoSelect.value = "99";
     } else if (tipoSeleccionado === "cancelar") {
         cancelacionSection.classList.remove("hidden");
+        btnContinuar.classList.add("hidden");
+        // btnContinuarTimbrado.classList.add("hidden");
+        btnCancelarFactura.classList.remove("hidden");
         motivoCancelacion.required = true;
     }
 }
@@ -173,7 +153,7 @@ document.getElementById("tipoTimbrado").onchange = function() {
 // Ejecutar al cargar la página por si el navegador restauró
 // un valor previo en el select (problema del estado al recargar)
 document.addEventListener("DOMContentLoaded", () => {
-    const tipoSeleccionado = document.getElementById("tipoTimbrado").value;
+    const tipoSeleccionado = getTipo();
     if (tipoSeleccionado) {
         actualizarSecciones(tipoSeleccionado);
     }
@@ -182,8 +162,7 @@ document.addEventListener("DOMContentLoaded", () => {
 
 // CONTINUAR
 document.getElementById("btnContinuarTimbrado").onclick = () => {
-    const tipoSeleccionado = document.getElementById("tipoTimbrado").value;
-    
+    const tipoSeleccionado = getTipo();
     if (!tipoSeleccionado) {
         alert("Selecciona un tipo.");
         return;
@@ -202,7 +181,7 @@ document.getElementById("btnContinuarTimbrado").onclick = () => {
     if (tipoSeleccionado === "anticipo") {
         xmlUnicoSection.classList.add("hidden");
         xmlAnticipoSection.classList.remove("hidden");
-    } else {
+    } else if( tipoSeleccionado === "complemento") {
         xmlUnicoSection.classList.remove("hidden");
         xmlAnticipoSection.classList.add("hidden");
     }
@@ -218,7 +197,7 @@ document.getElementById("btnContinuarTimbrado").onclick = () => {
 
 // MOSTRAR NOMBRE DEL ARCHIVO
 document.getElementById("xmlFile").onchange = function() {
-    const tipoSeleccionado = document.getElementById("tipoTimbrado").value;
+    const tipoSeleccionado = getTipo();
     const archivo = this.files[0];
     const fileNameDiv = document.getElementById("fileName");
     if (archivo) {
@@ -252,6 +231,7 @@ document.getElementById("xmlProductos").onchange = function() {
 document.getElementById("xmlAplicacion").onchange = function() {
     const archivo = this.files[0];
     const fileNameDiv = document.getElementById("fileNameAplicacion");
+    fileNameDiv.classList.remove("hidden");
     if (archivo) {
         fileNameDiv.textContent = archivo.name;
     } else {
@@ -287,7 +267,7 @@ function validarEntradasXML(xmlDom) {
         const folio = comprobante.getAttribute("Folio") || "";
         const fechaOriginal = comprobante.getAttribute("Fecha") || "";
         const base = trasladoGlobal.getAttribute("Base") || "";
-        console.log(base);
+        // console.log(base);
         const importe = trasladoGlobal.getAttribute("Importe") || "";
 
         const section = document.querySelector('#xmlUnicoSection');
@@ -356,44 +336,17 @@ function validarEntradasXML(xmlDom) {
 }
 
 
-function validarFechaXML(xmlDoc) {
-    const comprobante = xmlDoc.getElementsByTagName("cfdi:Comprobante")[0];
-    const fechaXML = comprobante.getAttribute("Fecha");
-    const fechaNomina = comprobante.getAttribute("fecha");
-    
-    if (!fechaXML && !fechaNomina) {
-        alert("El XML no contiene una fecha válida.");
-        return false;
-    }
-    
-    const fechaComprobante = new Date(fechaXML);
-    if (isNaN(fechaComprobante.getTime())) {
-        alert("La fecha en el XML tiene un formato inválido.");
-        return false;
-    }
-    
-    const ahora = new Date();
-    const maxPermitida = new Date(ahora.getTime() + (72 * 60 * 60 * 1000));
-    if (fechaComprobante > maxPermitida) {
-        alert("Error: La fecha del comprobante no puede ser mayor a 72 horas desde ahora.\n\nFecha en el XML: " + fechaXML + "\nFecha máxima permitida: " + maxPermitida.toISOString());
-        return false;
-    }
-    
-    return true;
-}
 
-
-// PROCESAR XML
+// PROCESAR XML para anticipo, complemento y nomina
 document.getElementById("procesarXML").onclick = () => {
-    const tipoSeleccionado = document.getElementById("tipoTimbrado").value;
-    
+    const tipoSeleccionado = getTipo();
     if (tipoSeleccionado === "anticipo") {
         const archivoProductos  = document.getElementById("xmlProductos").files[0];
         const archivoAplicacion = document.getElementById("xmlAplicacion").files[0];
         if (!archivoProductos)  { alert("Sube el Primer XML.");  return; }
         if (!archivoAplicacion) { alert("Sube el Segundo XML."); return; }
         procesarXMLsAnticipo(archivoProductos, archivoAplicacion);
-    } else if (tipoSeleccionado === "complemento" || tipoSeleccionado === "nomina") {
+    } else if (tipoSeleccionado === "complemento" || tipoSeleccionado === "nomina" ) {
         const archivo = document.getElementById("xmlFile").files[0];
         if (!archivo) { alert("Sube un XML."); return; }
         procesarXMLUnico(archivo);
@@ -402,7 +355,7 @@ document.getElementById("procesarXML").onclick = () => {
 
 
 function procesarXMLUnico(archivo) {
-    const tipoSeleccionado = document.getElementById("tipoTimbrado").value;
+    const tipoSeleccionado = getTipo();
     const lector = new FileReader();
     lector.onload = e => {
         const parser = new DOMParser();
@@ -448,6 +401,7 @@ function procesarXMLsAnticipo(archivoProductos, archivoAplicacion) {
 
 
 function procesarDatosFaltantes(xml) {
+    const tipoSeleccionado = getTipo();
     let faltan = [];
     const todosElementos = xml.getElementsByTagName("*");
     
@@ -462,28 +416,20 @@ function procesarDatosFaltantes(xml) {
         }
     }
     
-    if (xmlOriginal && !validarFechaXML(xmlOriginal)) {
+    if (!xmlOriginal) {
         return;
-    } else if (faltan.length === 0) {
+    }else if (faltan.length === 0) {
         alert("XML COMPLETO: Enviado a timbrar.");
         enviarParaTimbrar(xmlOriginal);
         return;
-    }
+    } 
     
-    let html = "";
-    faltan.forEach(f => {
-        html += `<label class="campo-label">${f.attr}</label>
-     <input type="text" class="entrada-texto" data-campo="${f.attr}" value="">`;
-    });
-    
-    document.getElementById("faltantesCampos").innerHTML = html;
-    document.getElementById("faltantesSection").classList.remove("hidden");
 }
 
 
 // --- ENVIAR PARA TIMBRAR ---
 function enviarParaTimbrar(xmlDom){
-    const tipoSeleccionado = document.getElementById("tipoTimbrado").value;
+    const tipoSeleccionado = getTipo();
     const xmlString = new XMLSerializer().serializeToString(xmlDom);
     const formData = new FormData(); 
     const xmlBlob = new Blob([xmlString], { type: "text/xml" });
@@ -521,9 +467,6 @@ function enviarParaTimbrar(xmlDom){
     formData.append("forma_pago", formaPagoSeleccionada);
 
     // Determinar endpoint según el tipo seleccionado
-    // console.log("Tipo seleccionado:", tipoSeleccionado);
-    // console.log("Forma de pago seleccionada:", formaPagoSeleccionada, "-", formaPagoTexto);
-    
     let endpoint;
     if (tipoSeleccionado === "complemento") {
     // tm7.telmedia.com.mx
@@ -613,7 +556,7 @@ function enviarParaTimbrar(xmlDom){
             archivosDescargados++;
             mensajes.push("PDF descargado");
         } else if(data.pdf_error) {
-            console.warn("Error generando PDF:", data.pdf_error);
+            // console.warn("Error generando PDF:", data.pdf_error);
             mensajes.push("PDF no disponible: " + data.pdf_error);
         }
 
@@ -630,7 +573,145 @@ function enviarParaTimbrar(xmlDom){
         alert(mensaje);
     })
     .catch(err=>{
-        console.error("Error enviando a timbrar:", err);
+        // console.error("Error enviando a timbrar:", err);
         alert("Error enviando a timbrar: " + err.message);
+    });
+}
+
+// Al cargar XML, extraer UUID y RFC automáticamente
+document.getElementById("xmlCancelacion").addEventListener("change", function() {
+    const archivo = this.files[0];
+    if (!archivo) return;
+    const lector = new FileReader();
+    lector.onload = e => {
+        const parser = new DOMParser();
+        const xml = parser.parseFromString(e.target.result, "text/xml");
+        // Extraer UUID del nodo TimbreFiscalDigital
+        const tfd = xml.getElementsByTagNameNS("http://www.sat.gob.mx/TimbreFiscalDigital", "TimbreFiscalDigital")[0];
+        if (tfd) {
+            document.getElementById("inputUUIDCancelar").value = tfd.getAttribute("UUID") || "";
+        }
+        // Extraer RFC Emisor
+        const emisor = xml.getElementsByTagNameNS("http://www.sat.gob.mx/cfd/4", "Emisor")[0]
+                    || xml.getElementsByTagNameNS("http://www.sat.gob.mx/cfd/3", "Emisor")[0];
+        if (emisor) {
+            document.getElementById("inputRFCEmisor").value = emisor.getAttribute("Rfc") || "";
+        }
+    };
+    lector.readAsText(archivo);
+});
+
+// Habilitar/deshabilitar UUID sustituto según motivo
+document.getElementById("motivoCancelacion").addEventListener("change", function() {
+    const sustituto = document.getElementById("inputUUIDSustituto");
+    if (this.value === "01") {
+        sustituto.disabled = false;
+        sustituto.placeholder = "Ingresa el UUID sustituto...";
+    } else {
+        sustituto.disabled = true;
+        sustituto.value = "";
+        sustituto.placeholder = "UUID sustituto (solo motivo 01)";
+    }
+});
+
+// Validación en tiempo real UUID
+document.getElementById("inputUUIDCancelar").addEventListener("input", function() {
+    const valor = this.value.toUpperCase();
+    // Solo permitir caracteres válidos para UUID (hex y guiones)
+    this.value = valor.replace(/[^A-F0-9-]/g, "");
+    const regexUUID = /^[A-F0-9]{8}-[A-F0-9]{4}-[A-F0-9]{4}-[A-F0-9]{4}-[A-F0-9]{12}$/;
+    if (this.value.length > 0 && !regexUUID.test(this.value)) {
+        this.style.borderColor = "red";
+    } else {
+        this.style.borderColor = "green";
+    }
+});
+
+// Validación en tiempo real RFC
+document.getElementById("inputRFCEmisor").addEventListener("input", function() {
+    const valor = this.value.toUpperCase();
+    // Solo permitir letras, números, Ñ y &
+    this.value = valor.replace(/[^A-ZÑ&0-9]/g, "");
+    // Limitar a 13 caracteres (RFC persona moral) o 12 (física)
+    if (this.value.length > 13) this.value = this.value.substring(0, 13);
+    const regexRFC = /^[A-ZÑ&]{3,4}\d{6}[A-Z0-9]{3}$/;
+    if (this.value.length > 0 && !regexRFC.test(this.value)) {
+        this.style.borderColor = "red";
+    } else {
+        this.style.borderColor = "green";
+    }
+});
+
+// Validación en tiempo real UUID Sustituto
+document.getElementById("inputUUIDSustituto").addEventListener("input", function() {
+    const valor = this.value.toUpperCase();
+    this.value = valor.replace(/[^A-F0-9-]/g, "");
+    const regexUUID = /^[A-F0-9]{8}-[A-F0-9]{4}-[A-F0-9]{4}-[A-F0-9]{4}-[A-F0-9]{12}$/;
+    if (this.value.length > 0 && !regexUUID.test(this.value)) {
+        this.style.borderColor = "red";
+    } else {
+        this.style.borderColor = "green";
+    }
+});
+
+// Botón cancelar
+document.getElementById("cancelarCFDI").onclick = () => {
+    const tipoSeleccionado = getTipo();
+    if (tipoSeleccionado === "cancelar") {
+        const uuid = document.getElementById("inputUUIDCancelar").value.trim();
+        const rfc = document.getElementById("inputRFCEmisor").value.trim();
+        const motivo = document.getElementById("motivoCancelacion").value;
+        const uuidSustituto = document.getElementById("inputUUIDSustituto").value.trim();
+
+        const regexUUID = /^[A-F0-9]{8}-[A-F0-9]{4}-[A-F0-9]{4}-[A-F0-9]{4}-[A-F0-9]{12}$/i;
+        const regexRFC  = /^[A-ZÑ&]{3,4}\d{6}[A-Z0-9]{3}$/i;
+
+        if (!uuid) { alert("Ingresa o carga un XML para obtener el UUID."); return; }
+        if (!regexUUID.test(uuid)) { alert("El UUID no tiene el formato correcto.\nEjemplo: FFB7D2D7-92F4-401D-B994-0FD05CBA6E50"); return; }
+
+        if (!rfc) { alert("Ingresa o carga un XML para obtener el RFC Emisor."); return; }
+        if (!regexRFC.test(rfc)) { alert("El RFC no tiene el formato correcto.\nEjemplo: RME980171ABZ"); return; }
+
+
+        if (!motivo) { alert("Selecciona un motivo de cancelación."); return; }
+        if (motivo === "01") { 
+            if (!uuidSustituto) { alert("El motivo 01 requiere un UUID sustituto."); return; }
+            if (!regexUUID.test(uuidSustituto)) { alert("El UUID sustituto no tiene el formato correcto."); return; }
+        }
+
+        enviarParaCancelar(uuid, rfc, motivo, uuidSustituto);
+    }
+};
+
+function enviarParaCancelar(uuid, rfcEmisor, motivoCancelacion, uuidSustituto = "") {
+    const formData = new FormData();
+    formData.append("uuid", uuid);
+    formData.append("rfc_emisor", rfcEmisor);
+    formData.append("motivo_cancelacion", motivoCancelacion);
+    formData.append("uuid_sustituto", uuidSustituto);
+
+    const endpoint = "https://127.0.0.1:5001/cancelar-cfdi";
+    fetch(endpoint, {
+        method: "POST",
+        body: formData
+    })
+    .then(r => {
+        if (!r.ok) return r.json().then(data => { throw new Error(data.error || `Error del servidor (${r.status})`); });
+        return r.json();
+    })
+    .then(data => {
+        if (!data.success) { 
+            alert("Error al cancelar:\n\n" + (data.error || "Error desconocido")); 
+            return; 
+        }
+        let mensaje = `CFDI Enviado a Cancelar.\n\nEstado: ${data.descripcion}`;
+        if (data.acuse)       mensaje += `\nAcuse: ${data.acuse}`;
+        if (data.digest)      mensaje += `\nDigest: ${data.digest}`;
+        if (data.certificado) mensaje += `\nCertificado: ${data.certificado}`;
+        alert(mensaje);
+    })
+    .catch(err => {
+        // console.error("Error al cancelar CFDI:", err);
+        alert("Error al cancelar CFDI: " + err.message);
     });
 }

@@ -22,7 +22,11 @@ RUTA_XSLT = r"xslt\cadenaoriginal_4_0.xslt"
 
 PAC_WSDL = "https://testing.solucionfactible.com/ws/services/Timbrado?wsdl"
 PAC_USER = "testing@solucionfactible.com"
+
+PAC_WSDL_CANCELAR = "https://testing.solucionfactible.com/ws/services/Cancelacion?wsdl"
 PAC_PASSWORD = "timbrado.SF.16672"
+
+
 
 def cargar_certificado(cert_path: str) -> tuple:
     with open(cert_path, 'rb') as f:
@@ -387,3 +391,62 @@ def generar_cadena_original_simplificada(xml_element) -> str:
     
     return cadena
 
+
+#cancelacion de CFDI
+def cancelar_cfdi_con_pac(uuid: str, motivo: str, rfc_emisor: str, email: str, uuid_sustituto: str = "", csd_cer: bytes = None, csd_key: bytes = None, csd_password: str = None) -> tuple:
+    """
+    Cancela un CFDI con el PAC Solución Factible.
+    
+    Args:
+        uuid: UUID del CFDI a cancelar
+        motivo: Motivo de cancelación (01, 02, 03, 04)
+        rfc_emisor: RFC del emisor del CFDI
+        email: Correo electrónico del emisor
+        uuid_sustituto: UUID del CFDI sustituto (solo requerido con motivo 01)
+    """
+    try:
+        # Construir cadena de cancelación en el formato que espera SF
+        uuids = f"{uuid}|{motivo}|{uuid_sustituto}"
+        # client = Client(PAC_WSDL_CANCELAR)
+        client = Client(PAC_WSDL)
+        #cancelarAsincrono
+        # result = client.service.cancelar(PAC_USER, PAC_PASSWORD, uuids, rfc_emisor,email, csd_cer,csd_key,csd_password)
+        result = client.service.cancelar(PAC_USER, PAC_PASSWORD, uuids, csd_cer,csd_key,csd_password)
+        
+        print(f"RESPUESTA DEL PAC - Status: {result.status}")
+
+        if result.status != 200:
+            mensaje = getattr(result, 'mensaje', 'Error desconocido en la cancelación')
+            print(f"ERROR DEL PAC: {mensaje}")
+            return None, mensaje
+
+        if not hasattr(result, 'resultados') or not result.resultados:
+            return None, "No se recibieron resultados del PAC"
+
+        primer_resultado = result.resultados[0]
+
+        uuid_cancelado = getattr(primer_resultado, 'uuid', None)
+        status_resultado = getattr(primer_resultado, 'status', None)
+        mensaje_resultado = getattr(primer_resultado, 'mensaje', None)
+        status_uuid = getattr(primer_resultado, 'statusUUID', None)
+
+        print(f"UUID: {uuid_cancelado}")
+        print(f"Status resultado: {status_resultado}")
+        print(f"Mensaje resultado: {mensaje_resultado}")
+        print(f"StatusUUID: {status_uuid}")
+
+        # Validar por status del resultado, no por statusUUID
+        if status_resultado != 200:
+            return None, f"Error en cancelación: {mensaje_resultado}"
+
+        return {
+            "uuid": uuid_cancelado,
+            "status": status_resultado,
+            "mensaje": mensaje_resultado,
+            "statusUUID": status_uuid
+        }, None
+
+    except Exception as e:
+        error_msg = f"Error al conectar con el PAC: {str(e)}"
+        print(error_msg)
+        return None, error_msg

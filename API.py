@@ -19,6 +19,8 @@ from flask_cors import CORS
 from decimal import Decimal
 # from typing import List, Optional
 import ssl
+import re
+import zlib
 
 
 # app = Flask(__name__)
@@ -42,13 +44,14 @@ from cfdi_service import (
     generar_xml_timbrado,
     sellar_cfdi_complemento,
     generar_xml_cfdi,
-    sellar_cfdi
+    sellar_cfdi,
+    cancelar_cfdi_con_pac
 )
 
-BASE_DIR = os.path.dirname(os.path.abspath(__file__))
-RUTA_CER = os.path.join(BASE_DIR, "CSD_Sucursal_1_EKU9003173C9_20230517_223850.cer")
-RUTA_KEY = os.path.join(BASE_DIR, "CSD_Sucursal_1_EKU9003173C9_20230517_223850.key")
-PASSWORD_KEY = b"12345678a"  
+# BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+# RUTA_CER = os.path.join(BASE_DIR, "CSD_Sucursal_1_EKU9003173C9_20230517_223850.cer")
+# RUTA_KEY = os.path.join(BASE_DIR, "CSD_Sucursal_1_EKU9003173C9_20230517_223850.key")
+# PASSWORD_KEY = b"12345678a"  
 
 RUTA_XSLT = r"xslt\cadenaoriginal_4_0.xslt"
 RUTA_CFDI_XSD = r"xsd\cfdv40.xsd"
@@ -708,7 +711,7 @@ def timbrar_nomina():
 
         return jsonify({
             "success": True,
-            "message": "todo chido",
+            "message": "timbrado con exito",
             "xml_timbrado": respuesta["xml"]
             # "pdf": respuesta["pdf"],
             # "pdf_filename": respuesta["pdf_filename"],
@@ -730,6 +733,96 @@ def crear_cfdi_nomina(xml_file, no_certificado, certificado_b64) -> str:
     # Convertir a string
     xml_string = ET.tostring(root, encoding='unicode', method='xml')
     return xml_string
+
+
+@app.route("/cancelar-cfdi", methods=["POST"])
+def cancelar_cfdi():
+    try:
+        uuid = request.form.get("uuid")
+        rfc_emisor = request.form.get("rfc_emisor")
+        motivo_cancelacion = request.form.get("motivo_cancelacion")
+        uuid_sustituto = request.form.get("uuid_sustituto", "")
+        email = "ircasarreal@telmedia.com.mx"
+
+        if not uuid or not rfc_emisor or not motivo_cancelacion:
+            return jsonify({"success": False, "error": "Faltan datos: uuid, rfc_emisor o motivo_cancelacion"}), 400
+
+        with open(RUTA_CER, 'rb') as f:
+            csd_cer = f.read()
+        with open(RUTA_KEY, 'rb') as f:
+            csd_key = f.read()
+
+        status, error = cancelar_cfdi_con_pac(
+            uuid=uuid,
+            motivo=motivo_cancelacion,
+            rfc_emisor=rfc_emisor,
+            email=email,
+            uuid_sustituto=uuid_sustituto,
+            csd_cer=csd_cer,
+            csd_key=csd_key,
+            csd_password='12345678a'
+        )
+
+        if error:
+            return jsonify({"success": False, "error": error}), 400
+
+        datos_cancelacion = parsear_mensaje_cancelacion(status["mensaje"])
+        return jsonify({
+            "success": True,
+            "descripcion": datos_cancelacion.get("descripcion"),
+            "acuse": datos_cancelacion.get("acuse"),
+            "digest": datos_cancelacion.get("digest"),
+            "certificado": datos_cancelacion.get("certificado")
+        })
+    except Exception as e:
+        return jsonify({"success": False, "error": str(e)}), 500
+
+
+def parsear_mensaje_cancelacion(mensaje: str) -> dict:
+    resultado = {
+        "descripcion": None,
+        "acuse": None,
+        "digest": None,
+        "certificado": None
+    }
+
+    # Si el mensaje NO contiene Acuse, es un mensaje simple (proceso, error, etc.)
+    if "Acuse:" not in mensaje:
+        resultado["descripcion"] = mensaje.strip()
+        return resultado
+
+    # Extraer descripcion
+    descripcion_match = re.match(r'^(.*?)\s*-\s*Acuse:', mensaje, re.DOTALL)
+    if descripcion_match:
+        resultado["descripcion"] = descripcion_match.group(1).strip()
+
+    # Extraer Acuse
+    accuse_match = re.search(r'Acuse:\s*([\w+/=\n\r]+?)(?=;\s*Digest:)', mensaje, re.DOTALL)
+    if accuse_match:
+        resultado["acuse"] = accuse_match.group(1).replace('\n', '').replace('\r', '').strip()
+
+    # Extraer Digest
+    digest_match = re.search(r'Digest:\s*([\w+/=\n\r]+?)(?=;\s*Certificado:)', mensaje, re.DOTALL)
+    if digest_match:
+        resultado["digest"] = digest_match.group(1).replace('\n', '').replace('\r', '').strip()
+
+    # Extraer Certificado
+    cert_match = re.search(r'Certificado:\s*([A-F0-9]+)', mensaje)
+    if cert_match:
+        resultado["certificado"] = cert_match.group(1).strip()
+
+    return resultado
+
+def extraer_rfcEmisor_cfdi(xml_cfdi: str) -> str:
+    ns = {
+        "cfdi": "http://www.sat.gob.mx/cfd/4",
+        "tfd": "http://www.sat.gob.mx/TimbreFiscalDigital"
+    }
+    root = ET.fromstring(xml_cfdi)
+    emisor = root.find("cfdi:Emisor", ns)
+    return emisor.get("Rfc") if emisor is not None else None
+
+
 
 @app.route("/timbrar-complemento-pago-ruta", methods=["GET"])
 def timbrar_complemento_pago_ruta():

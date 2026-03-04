@@ -10,12 +10,13 @@
         <h2 class="titulo-principal">TIMBRADO</h2>
         <label class="campo-label">Selecciona tipo:</label>
         <select id="tipoTimbrado" class="placeholder" required>
-            <option value="" disabled >-- Selecciona tipo --</option>
+            <option value="" disabled>-- Selecciona tipo --</option>
             <option value="anticipo">Aplicación de Anticipo</option>
             <option value="complemento">Complemento de Pago</option>
             <option value="nomina">De nomina</option>
-            <option value="cancelar">Cancelar factura </option>
+            <option value="cancelar">Cancelar factura</option>
         </select>
+
         <div id="formaPagoSection" class="hidden">
             <label class="campo-label">Forma de pago:</label>
             <select id="formaPago" class="placeholder" required>
@@ -27,6 +28,7 @@
                 <option value="99">99: Por definir (usualmente con PPD)</option>
             </select>
         </div>
+
         <div id="cancelacionSection" class="hidden">
             <label class="campo-label">Motivos de cancelacion:</label>
             <select id="motivoCancelacion" class="placeholder" required>
@@ -36,8 +38,26 @@
                 <option value="03">03: No se llevó a cabo la operación.</option>
                 <option value="04">04: Operación nominativa relacionada en una factura global.</option>
             </select>
+            <label class="campo-label">XML (opcional, si tienes el archivo):</label>
+                <div class="file-input-wrapper">
+                    <input id="xmlCancelacion" type="file" accept=".xml" class="file-input-hidden">
+                
+                    <!-- <input type="file" id="xmlFile" accept=".xml" class="file-input-hidden"> -->
+                    <label for="xmlCancelacion" class="file-input-custom">Seleccionar archivo</label>
+                </div>
+                
+
+                <label class="campo-label">UUID a cancelar:</label>
+                <input id="inputUUIDCancelar" type="text" class="file-input" placeholder="Se llena automáticamente al cargar XML...">
+                <label class="campo-label">RFC Emisor:</label>
+                <input id="inputRFCEmisor" type="text" class="file-input" placeholder="Se llena automáticamente al cargar XML...">
+                <label class="campo-label">UUID que sustituirá (solo motivo 01):</label>
+                <input id="inputUUIDSustituto" type="text" class="file-input" placeholder="UUID sustituto..." disabled>
         </div>
+
         <button id="btnContinuarTimbrado" class="btn-accion">Continuar</button>
+        <button id="cancelarCFDI" class="btn-accion hidden">CANCELAR FACTURA</button>
+
         <div id="subirXMLSection" class="hidden">
             <div id="xmlUnicoSection">
                 <label class="campo-label"><b>Subir factura (XML):</b></label>
@@ -61,10 +81,11 @@
                         <label for="xmlAplicacion" class="file-input-custom">Seleccionar Segundo XML</label>
                     </div>
                 </div>
-                <div id="fileNameAplicacion" class="file-name"></div>
+                <div id="fileNameAplicacion" class="file-name hidden"></div>
             </div>
             <button id="procesarXML" class="btn-accion">SELLAR Y TIMBRAR</button>
         </div>
+
     </div>
     <script src="tm/assets/js/timbrado.js"></script>
 </body>
