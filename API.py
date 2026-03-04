@@ -729,8 +729,8 @@ def cancelar_cfdi():
         uuid_sustituto = request.form.get("uuid_sustituto", "")
         email = "ircasarreal@telmedia.com.mx"
 
-        if not uuid or not rfc_emisor or not motivo_cancelacion:
-            return jsonify({"success": False, "error": "Faltan datos: uuid, rfc_emisor o motivo_cancelacion"}), 400
+        if not uuid or not motivo_cancelacion:
+            return jsonify({"success": False, "error": "Faltan datos: uuid o motivo_cancelacion"}), 400
 
         with open(RUTA_CER, 'rb') as f:
             csd_cer = f.read()

@@ -669,8 +669,14 @@ document.getElementById("cancelarCFDI").onclick = () => {
         if (!uuid) { alert("Ingresa o carga un XML para obtener el UUID."); return; }
         if (!regexUUID.test(uuid)) { alert("El UUID no tiene el formato correcto.\nEjemplo: FFB7D2D7-92F4-401D-B994-0FD05CBA6E50"); return; }
 
-        if (!rfc) { alert("Ingresa o carga un XML para obtener el RFC Emisor."); return; }
-        if (!regexRFC.test(rfc)) { alert("El RFC no tiene el formato correcto.\nEjemplo: RME980171ABZ"); return; }
+        // if (rfc) { alert("Ingresa o carga un XML para obtener el RFC Emisor."); return; }
+        // if (!regexRFC.test(rfc)) { alert("El RFC no tiene el formato correcto.\nEjemplo: RME980171ABZ"); return; }
+        if(rfc) {
+            if(!regexRFC.test(rfc)) {
+                alert("El RFC no tiene el formato correcto.\nEjemplo: RME980171ABZ"); 
+                return;
+            }
+        }
 
 
         if (!motivo) { alert("Selecciona un motivo de cancelación."); return; }
