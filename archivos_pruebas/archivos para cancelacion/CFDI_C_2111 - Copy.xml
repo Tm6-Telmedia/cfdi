@@ -1,0 +1,22 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<cfdi:Comprobante xmlns:cfdi="http://www.sat.gob.mx/cfd/4" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" CondicionesDePago="CONTADO" Exportacion="01" Fecha="2026-02-06T13:12:50" Folio="2111" FormaPago="99" LugarExpedicion="01210" MetodoPago="PPD" Moneda="MXN" Serie="C" SubTotal="16479.87" TipoCambio="1" TipoDeComprobante="I" Total="19116.65" Version="4.0" xsi:schemaLocation="http://www.sat.gob.mx/cfd/4 http://www.sat.gob.mx/sitio_internet/cfd/4/cfdv40.xsd">
+    <cfdi:Emisor Nombre="ESCUELA KEMPER URGATE" RegimenFiscal="601" Rfc="EKU9003173C9" />
+    <cfdi:Receptor DomicilioFiscalReceptor="86991" Nombre="UNIVERSIDAD ROBOTICA ESPAÑOLA" RegimenFiscalReceptor="626" Rfc="URE180429TM6" UsoCFDI="G03" />
+    <cfdi:Conceptos>
+        <cfdi:Concepto Cantidad="1" ClaveProdServ="84111506" ClaveUnidad="ACT" Descripcion="Anticipo del bien o servicio" Importe="16479.87" ObjetoImp="02" Unidad="ACT" ValorUnitario="16479.87">
+            <cfdi:Impuestos>
+                <cfdi:Traslados>
+                    <cfdi:Traslado Base="16479.87" Importe="2636.78" Impuesto="002" TasaOCuota=".16" TipoFactor="Tasa" />
+                </cfdi:Traslados>
+            </cfdi:Impuestos>
+        </cfdi:Concepto>
+    </cfdi:Conceptos>
+    <cfdi:Impuestos TotalImpuestosTrasladados="2636.78">
+        <cfdi:Traslados>
+            <cfdi:Traslado Base="16479.87" Importe="2636.78" Impuesto="002" TasaOCuota="0.16" TipoFactor="Tasa" />
+        </cfdi:Traslados>
+    </cfdi:Impuestos>
+    <cfdi:Complemento>
+        <tfd:TimbreFiscalDigital xmlns:tfd="http://www.sat.gob.mx/TimbreFiscalDigital" xsi:schemaLocation="http://www.sat.gob.mx/TimbreFiscalDigital http://www.sat.gob.mx/sitio_internet/cfd/TimbreFiscalDigital/TimbreFiscalDigitalv11.xsd" Version="1.1" UUID="0F5CBB86-86DE-40EE-98E2-893DEBC9CAF6" FechaTimbrado="2026-02-27T14:27:48" RfcProvCertif="SFE0807172W7" SelloCFD="SrK7LVn6Q44luU8/yjEzcQdZXY1gCQE6u5TuFEaEdRhVdmYXKXKJ/65VccbJJCzogeUcLJJn1wT17QEQhMMt4Dcz966EhWPjsMd9aFna9fA8tBmsfjyyIASFFQ/7rbOLvgXMPCkj7BzJkeo3wuHFqkuy+WXYxZ4DfHRIvoWAHs8ekg58uTTpZrFdhiBrI+bCmHKfNLzgtZZKEmEbxlkr5DgjOgejEhf3OtL7qdccW5/s90PKCPYU/SUn5BMIzXJgnCZ+H4YDLjKCDzY5JxAFxboQsq/AKww7enLvwO9ZN1kLHrboNpEpX4t5XDK+qm9JU79Vm9uyboQCtTAkbYjUcw==" NoCertificadoSAT="30001000000500003442" SelloSAT="cTfNWsnqL90Aa3EH9HLw/4aQ/+eyeNVX4hBY1snXztwyb5IpbOLbmnAQO50l/G9foTq98IAEC2j9tjsKEEYxT+YZcOmtxGBOGDRRtgC11abUTpvR4/Fr8NIRtpHqnvVZQpeKGIOiA/TIHiGZUFOEqsv/030uSb/qhwvpflemu9p5XgXNIRJyTzsX/NeJoyGiYrLpLv5dwivwunPrdMWG/n/HvYo4aFcpieFGo27AltuPCXzUgt1ypZkZujVeVt2MiW70FECTQemw7nbqGaWvDn8wUEaynDHY7ppiTaYIB/6Cc/olDgVRRpfXbkZjUt+6K9PO2wuvK/74zQ9EKyjqQQ=="/>
+</cfdi:Complemento>
+</cfdi:Comprobante>

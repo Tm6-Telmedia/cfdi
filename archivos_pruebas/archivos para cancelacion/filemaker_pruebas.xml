@@ -1,0 +1,152 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<FMPDSORESULT xmlns="http://www.filemaker.com/fmpdsoresult">
+<ERRORCODE>0</ERRORCODE>
+<DATABASE>Ingresos.fmp12</DATABASE>
+<LAYOUT>Generador CFDI Items_Factura</LAYOUT>
+<ROW MODID="1" RECORDID="9001">
+<id_factura><DATA>9004</DATA></id_factura>
+<Emisor_Nombre><DATA>ESCUELA KEMPER URGATE SA DE CV</DATA></Emisor_Nombre>
+<Emisor_RFC><DATA>EKU9003173C9</DATA></Emisor_RFC>
+<Emisor_Regimen><DATA>General de Ley Personas Morales</DATA></Emisor_Regimen>
+<Emisor_c_RegimenFiscal><DATA>601</DATA></Emisor_c_RegimenFiscal>
+<Emisor_codigo_postal><DATA>06300</DATA></Emisor_codigo_postal>
+<Emisor_calle><DATA>AV. HIDALGO</DATA></Emisor_calle>
+<Emisor_NoExt_opc><DATA>77</DATA></Emisor_NoExt_opc>
+<Emisor_NoInt_opc_nnull><DATA>NA</DATA></Emisor_NoInt_opc_nnull>
+<Emisor_colonia_opc><DATA>GUERRERO</DATA></Emisor_colonia_opc>
+<Emisor_municipio><DATA>CUAUHTEMOC</DATA></Emisor_municipio>
+<Emisor_estado><DATA>CDMX</DATA></Emisor_estado>
+<Emisor_pais><DATA>MEXICO</DATA></Emisor_pais>
+<serie><DATA>P</DATA></serie>
+<folio><DATA>9003</DATA></folio>
+<Estatus_Factura><DATA>ACTIVA</DATA></Estatus_Factura>
+<Estatus_CFDI><DATA/></Estatus_CFDI>
+<UUID><DATA/></UUID>
+<Receptor_Nombre_Cliente_opc><DATA>ESCUELA KEMPER URGATE SA DE CV</DATA></Receptor_Nombre_Cliente_opc>
+<Receptor_RFC><DATA>EKU9003173C9</DATA></Receptor_RFC>
+<Receptor_NumRegIdTrib><DATA/></Receptor_NumRegIdTrib>
+<Receptor_Calle_opc><DATA>AV. HIDALGO</DATA></Receptor_Calle_opc>
+<Receptor_noExt_opc><DATA>77</DATA></Receptor_noExt_opc>
+<Receptor_noInt_opc_nnull><DATA>NA</DATA></Receptor_noInt_opc_nnull>
+<Receptor_colonia_opc><DATA>GUERRERO</DATA></Receptor_colonia_opc>
+<Receptor_municipio_opc><DATA>CUAUHTEMOC</DATA></Receptor_municipio_opc>
+<Receptor_Estado_opc><DATA>CIUDAD DE MEXICO</DATA></Receptor_Estado_opc>
+<Receptor_c_Pais><DATA>MEX</DATA></Receptor_c_Pais>
+<Receptor_Pais><DATA>México</DATA></Receptor_Pais>
+<Receptor_CP_opc><DATA>06300</DATA></Receptor_CP_opc>
+<Receptor_UsoCFDI><DATA>G01</DATA></Receptor_UsoCFDI>
+<id_cliente><DATA>9001</DATA></id_cliente>
+<Receptor_regimen><DATA>601</DATA></Receptor_regimen>
+<Nombre_Proyecto><DATA>Proyecto de prueba</DATA></Nombre_Proyecto>
+<Concepto><DATA>Servicios de prueba</DATA></Concepto>
+<fechaFactura><DATA>19/02/2026</DATA></fechaFactura>
+<status><DATA/></status>
+<Fecha_y_Hora_CFDI><DATA>2026-02-19T12:00:00</DATA></Fecha_y_Hora_CFDI>
+<totalPesos><DATA>23200.00</DATA></totalPesos>
+<Metodo_de_pago><DATA>PUE</DATA></Metodo_de_pago>
+<Condiciones_de_Pago><DATA>CONTADO</DATA></Condiciones_de_Pago>
+<No_Cuenta_Pago><DATA>0000</DATA></No_Cuenta_Pago>
+<Forma_de_pago><DATA>03</DATA></Forma_de_pago>
+<Serie_original><DATA/></Serie_original>
+<Folio_original><DATA/></Folio_original>
+<Fecha_original><DATA/></Fecha_original>
+<Total_original><DATA/></Total_original>
+<Subtotal><DATA>20000.00</DATA></Subtotal>
+<Iva><DATA>3200.00</DATA></Iva>
+<porcentaje_IVA><DATA>0.16</DATA></porcentaje_IVA>
+<Total><DATA>23200.00</DATA></Total>
+<email><DATA>pruebas@kemper.com</DATA></email>
+<d_contacto_Cliente><DATA>Contacto de Prueba</DATA></d_contacto_Cliente>
+<telefonos><DATA>5555555555</DATA></telefonos>
+<ClaveProdServ>81112500</ClaveProdServ>
+<cantidad>10</cantidad>
+<Clave_unidad>E48</Clave_unidad>
+<unidad>Servicio</unidad>
+<ConceptoItem>Servicio de prueba concepto 1</ConceptoItem>
+<Monto>1200.00</Monto>
+<Importe>12000.00</Importe>
+<DescuentoItem>0.00</DescuentoItem>
+<tasa_IVA_porcentaje>.16</tasa_IVA_porcentaje>
+<Importe_menos_descuento>12000.00</Importe_menos_descuento>
+<observaciones><DATA/></observaciones>
+<TipoCambio><DATA>1</DATA></TipoCambio>
+<tasa_IVA>16.00</tasa_IVA>
+<monto_item_IVA>1920.00</monto_item_IVA>
+<Moneda_Simbolo><DATA>MXN</DATA></Moneda_Simbolo>
+<Motivo_DescuentoGral><DATA/></Motivo_DescuentoGral>
+<Subtotal_DescuentoGral><DATA>0.00</DATA></Subtotal_DescuentoGral>
+</ROW>
+<ROW MODID="1" RECORDID="9002">
+<id_factura><DATA>9001</DATA></id_factura>
+<Emisor_Nombre><DATA>ESCUELA KEMPER URGATE SA DE CV</DATA></Emisor_Nombre>
+<Emisor_RFC><DATA>EKU9003173C9</DATA></Emisor_RFC>
+<Emisor_Regimen><DATA>General de Ley Personas Morales</DATA></Emisor_Regimen>
+<Emisor_c_RegimenFiscal><DATA>601</DATA></Emisor_c_RegimenFiscal>
+<Emisor_codigo_postal><DATA>06300</DATA></Emisor_codigo_postal>
+<Emisor_calle><DATA>AV. HIDALGO</DATA></Emisor_calle>
+<Emisor_NoExt_opc><DATA>77</DATA></Emisor_NoExt_opc>
+<Emisor_NoInt_opc_nnull><DATA>NA</DATA></Emisor_NoInt_opc_nnull>
+<Emisor_colonia_opc><DATA>GUERRERO</DATA></Emisor_colonia_opc>
+<Emisor_municipio><DATA>CUAUHTEMOC</DATA></Emisor_municipio>
+<Emisor_estado><DATA>CDMX</DATA></Emisor_estado>
+<Emisor_pais><DATA>MEXICO</DATA></Emisor_pais>
+<serie><DATA>P</DATA></serie>
+<folio><DATA>9001</DATA></folio>
+<Estatus_Factura><DATA>ACTIVA</DATA></Estatus_Factura>
+<Estatus_CFDI><DATA/></Estatus_CFDI>
+<UUID><DATA/></UUID>
+<Receptor_Nombre_Cliente_opc><DATA>ESCUELA KEMPER URGATE SA DE CV</DATA></Receptor_Nombre_Cliente_opc>
+<Receptor_RFC><DATA>EKU9003173C9</DATA></Receptor_RFC>
+<Receptor_NumRegIdTrib><DATA/></Receptor_NumRegIdTrib>
+<Receptor_Calle_opc><DATA>AV. HIDALGO</DATA></Receptor_Calle_opc>
+<Receptor_noExt_opc><DATA>77</DATA></Receptor_noExt_opc>
+<Receptor_noInt_opc_nnull><DATA>NA</DATA></Receptor_noInt_opc_nnull>
+<Receptor_colonia_opc><DATA>GUERRERO</DATA></Receptor_colonia_opc>
+<Receptor_municipio_opc><DATA>CUAUHTEMOC</DATA></Receptor_municipio_opc>
+<Receptor_Estado_opc><DATA>CIUDAD DE MEXICO</DATA></Receptor_Estado_opc>
+<Receptor_c_Pais><DATA>MEX</DATA></Receptor_c_Pais>
+<Receptor_Pais><DATA>México</DATA></Receptor_Pais>
+<Receptor_CP_opc><DATA>06300</DATA></Receptor_CP_opc>
+<Receptor_UsoCFDI><DATA>G01</DATA></Receptor_UsoCFDI>
+<id_cliente><DATA>9001</DATA></id_cliente>
+<Receptor_regimen><DATA>601</DATA></Receptor_regimen>
+<Nombre_Proyecto><DATA>Proyecto de prueba</DATA></Nombre_Proyecto>
+<Concepto><DATA>Servicios de prueba</DATA></Concepto>
+<fechaFactura><DATA>19/02/2026</DATA></fechaFactura>
+<status><DATA/></status>
+<Fecha_y_Hora_CFDI><DATA>2026-02-19T12:00:00</DATA></Fecha_y_Hora_CFDI>
+<totalPesos><DATA>23200.00</DATA></totalPesos>
+<Metodo_de_pago><DATA>PUE</DATA></Metodo_de_pago>
+<Condiciones_de_Pago><DATA>CONTADO</DATA></Condiciones_de_Pago>
+<No_Cuenta_Pago><DATA>0000</DATA></No_Cuenta_Pago>
+<Forma_de_pago><DATA>03</DATA></Forma_de_pago>
+<Serie_original><DATA/></Serie_original>
+<Folio_original><DATA/></Folio_original>
+<Fecha_original><DATA/></Fecha_original>
+<Total_original><DATA/></Total_original>
+<Subtotal><DATA>20000.00</DATA></Subtotal>
+<Iva><DATA>3200.00</DATA></Iva>
+<porcentaje_IVA><DATA>0.16</DATA></porcentaje_IVA>
+<Total><DATA>23200.00</DATA></Total>
+<email><DATA>pruebas@kemper.com</DATA></email>
+<d_contacto_Cliente><DATA>Contacto de Prueba</DATA></d_contacto_Cliente>
+<telefonos><DATA>5555555555</DATA></telefonos>
+<ClaveProdServ>81112400</ClaveProdServ>
+<cantidad>10</cantidad>
+<Clave_unidad>E48</Clave_unidad>
+<unidad>Servicio</unidad>
+<ConceptoItem>Servicio de prueba concepto 2</ConceptoItem>
+<Monto>800.00</Monto>
+<Importe>8000.00</Importe>
+<DescuentoItem>0.00</DescuentoItem>
+<tasa_IVA_porcentaje>.16</tasa_IVA_porcentaje>
+<Importe_menos_descuento>8000.00</Importe_menos_descuento>
+<observaciones><DATA/></observaciones>
+<TipoCambio><DATA>1</DATA></TipoCambio>
+<tasa_IVA>16.00</tasa_IVA>
+<monto_item_IVA>1280.00</monto_item_IVA>
+<Moneda_Simbolo><DATA>MXN</DATA></Moneda_Simbolo>
+<Motivo_DescuentoGral><DATA/></Motivo_DescuentoGral>
+<Subtotal_DescuentoGral><DATA>0.00</DATA></Subtotal_DescuentoGral>
+</ROW>
+</FMPDSORESULT>
