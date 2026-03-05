@@ -1,5 +1,5 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<cfdi:Comprobante xmlns:cfdi="http://www.sat.gob.mx/cfd/4" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" CondicionesDePago="CONTADO" Exportacion="01" Fecha="2026-02-06T13:12:50" Folio="2111" FormaPago="99" LugarExpedicion="01210" MetodoPago="PPD" Moneda="MXN" Serie="C" SubTotal="16479.87" TipoCambio="1" TipoDeComprobante="I" Total="19116.65" Version="4.0" xsi:schemaLocation="http://www.sat.gob.mx/cfd/4 http://www.sat.gob.mx/sitio_internet/cfd/4/cfdv40.xsd">
+<cfdi:Comprobante xmlns:cfdi="http://www.sat.gob.mx/cfd/4" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" CondicionesDePago="CONTADO" Exportacion="01" Fecha="2026-03-05T13:12:50" Folio="2111" FormaPago="99" LugarExpedicion="01210" MetodoPago="PPD" Moneda="MXN" Serie="C" SubTotal="16479.87" TipoCambio="1" TipoDeComprobante="I" Total="19116.65" Version="4.0" xsi:schemaLocation="http://www.sat.gob.mx/cfd/4 http://www.sat.gob.mx/sitio_internet/cfd/4/cfdv40.xsd">
     <cfdi:Emisor Nombre="ESCUELA KEMPER URGATE" RegimenFiscal="601" Rfc="EKU9003173C9" />
     <cfdi:Receptor DomicilioFiscalReceptor="86991" Nombre="UNIVERSIDAD ROBOTICA ESPAÑOLA" RegimenFiscalReceptor="626" Rfc="URE180429TM6" UsoCFDI="G03" />
     <cfdi:Conceptos>
