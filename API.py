@@ -15,12 +15,13 @@ from datetime import datetime
 # from cryptography import x509
 import os
 from flask_cors import CORS
+from flask import send_file
 # from xml.dom.minidom import parseString
 from decimal import Decimal
 # from typing import List, Optional
 import ssl
 import re
-import zlib
+import io
 
 '''
 para produccion cambiar en este archivo la ruta del certificado, key y el password de la key
@@ -808,13 +809,12 @@ def extraer_rfcEmisor_cfdi(xml_cfdi: str) -> str:
     return emisor.get("Rfc") if emisor is not None else None
 
 
-
 @app.route("/timbrar-complemento-pago-ruta", methods=["GET"])
 def timbrar_complemento_pago_ruta():
     try:
-        # Obtener parámetros de la URL
         ruta_xml = request.args.get("ruta_xml")
         forma_pago = request.args.get("forma_pago")
+        descargar = request.args.get("descargar", "pdf")  # "pdf" o "xml"
         
         if not ruta_xml or not forma_pago:
             return jsonify({
@@ -822,14 +822,12 @@ def timbrar_complemento_pago_ruta():
                 "error": "Faltan parámetros: ruta_xml y forma_pago"
             }), 400
         
-        # Validar que el archivo existe
         if not os.path.exists(ruta_xml):
             return jsonify({
                 "success": False, 
                 "error": f"Archivo no encontrado: {ruta_xml}"
             }), 404
         
-        # Leer el archivo XML
         with open(ruta_xml, 'r', encoding='utf-8') as file:
             xml_cfdi_string = file.read()
         
@@ -843,25 +841,44 @@ def timbrar_complemento_pago_ruta():
         xml_bytes = xml_sellado.encode("utf-8")
         guardar_xml(xml_bytes, tipo_comprobante="anticipo")
         
-        xml_timbrado = timbrar_con_pac(xml_bytes)
-        respuesta = generar_xml_timbrado(xml_timbrado)
+        xml_timbrado_tupla = timbrar_con_pac(xml_bytes)
+        xml_timbrado = xml_timbrado_tupla[0]
+        # print("TIPO:", type(xml_timbrado))
+        # print("VALOR:", xml_timbrado)
+        xml_timbrado_result = generar_xml_timbrado(xml_timbrado)
         
-        xml_base64 = base64.b64encode(respuesta["xml"].encode('utf-8')).decode('utf-8')
-        xml_timbrado_bytes = respuesta["xml"].encode('utf-8')
-        
-        respuesta = generar_respuesta_dual(xml_timbrado_bytes, "P")
-        
-        return jsonify({
-            "success": True,
-            "xml_timbrado": xml_base64,
-            "pdf": respuesta["pdf"],
-            "pdf_filename": respuesta["pdf_filename"],
-            "archivo_procesado": ruta_xml
-        })
-    
-    except Exception as e:
-        return jsonify({"success": False, "error": str(e)}), 500
+        xml_timbrado_bytes = xml_timbrado_result["xml"].encode('utf-8')
+        respuesta_dual = generar_respuesta_dual(xml_timbrado_bytes, "P")
 
+        # Descarga de PDF
+        if descargar == "pdf":
+            pdf_bytes = base64.b64decode(respuesta_dual["pdf"])
+            return send_file(
+                io.BytesIO(pdf_bytes),
+                mimetype="application/pdf",
+                as_attachment=True,
+                download_name=respuesta_dual["pdf_filename"]
+            )
+        
+        # Descarga de XML
+        elif descargar == "xml":
+            return send_file(
+                io.BytesIO(xml_timbrado_bytes),
+                mimetype="application/xml",
+                as_attachment=True,
+                download_name="complemento_pago_timbrado.xml"
+            )
+        
+        else:
+            return jsonify({"success": False, "error": "Parámetro descargar inválido: usa 'pdf' o 'xml'"}), 400
+
+    except Exception as e:
+        import traceback
+        return jsonify({
+            "success": False, 
+            "error": str(e),
+            "traceback": traceback.format_exc()  # ← esto
+        }), 500
 
 @app.route("/timbrar-aplicacion-anticipo-ruta", methods=["GET"])
 def timbrar_aplicacion_anticipo_ruta():
@@ -969,6 +986,74 @@ def timbrar_aplicacion_anticipo_ruta():
     except Exception as e:
         return jsonify({"success": False, "error": str(e)}), 500
 
+@app.route("/cancelar-cfdi-ruta", methods=["GET"])
+def cancelar_cfdi_ruta():
+    try:
+        uuid = request.args.get("uuid")
+        rfc_emisor = request.args.get("rfc_emisor")
+        motivo_cancelacion = request.args.get("motivo_cancelacion")
+        uuid_sustituto = request.args.get("uuid_sustituto", "")
+        email = "ircasarreal@telmedia.com.mx"
+
+        if not uuid or not motivo_cancelacion:
+            return jsonify({"success": False, "error": "Faltan datos: uuid o motivo_cancelacion"}), 400
+
+        with open(RUTA_CER, 'rb') as f:
+            csd_cer = f.read()
+        with open(RUTA_KEY, 'rb') as f:
+            csd_key = f.read()
+
+        status, error = cancelar_cfdi_con_pac(
+            uuid=uuid,
+            motivo=motivo_cancelacion,
+            rfc_emisor=rfc_emisor,
+            email=email,
+            uuid_sustituto=uuid_sustituto,
+            csd_cer=csd_cer,
+            csd_key=csd_key,
+            csd_password='12345678a'
+        )
+
+        if error:
+            return jsonify({"success": False, "error": error}), 400
+
+        datos_cancelacion = parsear_mensaje_cancelacion(status["mensaje"])
+
+        # Armar contenido del TXT
+        contenido = generar_txt_cancelacion(uuid, rfc_emisor, motivo_cancelacion, uuid_sustituto, datos_cancelacion)
+
+        return send_file(
+            io.BytesIO(contenido.encode('utf-8')),
+            mimetype="text/plain",
+            as_attachment=True,
+            download_name=f"cancelacion_{uuid}.txt"
+        )
+
+    except Exception as e:
+        import traceback
+        return jsonify({
+            "success": False,
+            "error": str(e),
+            "traceback": traceback.format_exc()
+        }), 500
+    
+def generar_txt_cancelacion(uuid, rfc_emisor, motivo, uuid_sustituto, datos_cancelacion):
+    return f"""RESULTADO DE CANCELACIÓN
+========================
+UUID:           {uuid}
+RFC Emisor:     {rfc_emisor}
+Motivo:         {motivo}
+UUID Sustituto: {uuid_sustituto}
+
+RESPUESTA DEL PAC
+-----------------
+Descripción:  {datos_cancelacion.get("descripcion")}
+Digest:       {datos_cancelacion.get("digest")}
+Certificado:  {datos_cancelacion.get("certificado")}
+
+ACUSE:
+{datos_cancelacion.get("acuse")}
+"""
 
 if __name__ == "__main__":
     app.run(host='0.0.0.0', port=5001, debug=True, ssl_context=context)
