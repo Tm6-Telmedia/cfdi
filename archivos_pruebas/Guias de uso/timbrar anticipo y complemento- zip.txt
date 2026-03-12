@@ -1,0 +1,9 @@
+timbrar anticipo y complemento
+
+//cambiar fechas a una valida para pruebas (que este dentro de 72 horas)
+
+comando para complemento: (se requiere la ruta del archivo y forma de pago = 02, 03, 04, 28, 99 )
+curl -k -OJ --get --data-urlencode "ruta_xml=C:\Users\ismar\Downloads\CFDI_C_2111 - Copy.xml" --data-urlencode "forma_pago=03" "https://127.0.0.1:5001/timbrar-complemento-pago-ruta"
+
+comando para anticipo: (se requiere las rutas de ambos archivos donde esta el uuid y el de los conceptos)
+curl -k -OJ --get --data-urlencode "ruta_xml_anticipo="C:\Users\ismar\Downloads\CFDI__de_anticipo.xml"" --data-urlencode "ruta_xml_filemaker="C:\Users\ismar\Downloads\filemaker_pruebas.xml"" "https://127.0.0.1:5001/timbrar-aplicacion-anticipo-ruta"
