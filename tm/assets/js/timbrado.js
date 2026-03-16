@@ -160,7 +160,7 @@ document.addEventListener("DOMContentLoaded", () => {
 });
 
 
-// CONTINUAR
+// boton para CONTINUAR
 document.getElementById("btnContinuarTimbrado").onclick = () => {
     const tipoSeleccionado = getTipo();
     if (!tipoSeleccionado) {
@@ -187,6 +187,11 @@ document.getElementById("btnContinuarTimbrado").onclick = () => {
     }
 
     if (tipoSeleccionado === "nomina") {
+        xmlUnicoSection.classList.remove("hidden");
+        xmlAnticipoSection.classList.add("hidden");
+    }
+
+    if (tipoSeleccionado === "ingreso") {
         xmlUnicoSection.classList.remove("hidden");
         xmlAnticipoSection.classList.add("hidden");
     }
@@ -337,7 +342,7 @@ function validarEntradasXML(xmlDom) {
 
 
 
-// PROCESAR XML para anticipo, complemento y nomina
+// PROCESAR XML para anticipo, complemento, ingreso, nomina
 document.getElementById("procesarXML").onclick = () => {
     const tipoSeleccionado = getTipo();
     if (tipoSeleccionado === "anticipo") {
@@ -346,7 +351,7 @@ document.getElementById("procesarXML").onclick = () => {
         if (!archivoProductos)  { alert("Sube el Primer XML.");  return; }
         if (!archivoAplicacion) { alert("Sube el Segundo XML."); return; }
         procesarXMLsAnticipo(archivoProductos, archivoAplicacion);
-    } else if (tipoSeleccionado === "complemento" || tipoSeleccionado === "nomina" ) {
+    } else if (tipoSeleccionado === "complemento" || tipoSeleccionado === "nomina" || tipoSeleccionado === "ingreso") {
         const archivo = document.getElementById("xmlFile").files[0];
         if (!archivo) { alert("Sube un XML."); return; }
         procesarXMLUnico(archivo);
@@ -360,7 +365,7 @@ function procesarXMLUnico(archivo) {
     lector.onload = e => {
         const parser = new DOMParser();
         const xml = parser.parseFromString(e.target.result, "text/xml");
-        if (tipoSeleccionado === "nomina") {
+        if (tipoSeleccionado === "nomina" || tipoSeleccionado === "ingreso" ) { //esta condicional es para cuando es un solo archivo sin modificaciones
             xmlOriginal = xml;
         }
         procesarDatosFaltantes(xml);
@@ -446,7 +451,7 @@ function enviarParaTimbrar(xmlDom){
             alert("Error: Faltan archivos XML para anticipo.");
             return;
         }
-    } else if( tipoSeleccionado === "complemento" || tipoSeleccionado === "nomina") {
+    } else if( tipoSeleccionado === "complemento" || tipoSeleccionado === "nomina" || tipoSeleccionado === "ingreso") {
         // Para complemento: enviar un XML
         formData.append("xml", xmlBlob, "factura.xml");
         // console.log(xmlBlob)
@@ -475,6 +480,8 @@ function enviarParaTimbrar(xmlDom){
         endpoint = "https://127.0.0.1:5001/timbrar-aplicacion-anticipo";
     } else if(tipoSeleccionado === "nomina"){
         endpoint = "https://127.0.0.1:5001/timbrar-nomina";
+    } else if(tipoSeleccionado === "ingreso"){
+        endpoint = "https://127.0.0.1:5001/timbrar-ingreso";
     } else {
         alert("Selecciona un tipo válido.");
         return;

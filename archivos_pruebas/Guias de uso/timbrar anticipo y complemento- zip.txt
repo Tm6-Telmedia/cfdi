@@ -7,3 +7,6 @@ curl -k -OJ --get --data-urlencode "ruta_xml=C:\Users\ismar\Downloads\CFDI_C_211
 
 comando para anticipo: (se requiere las rutas de ambos archivos donde esta el uuid y el de los conceptos)
 curl -k -OJ --get --data-urlencode "ruta_xml_anticipo="C:\Users\ismar\Downloads\CFDI__de_anticipo.xml"" --data-urlencode "ruta_xml_filemaker="C:\Users\ismar\Downloads\filemaker_pruebas.xml"" "https://127.0.0.1:5001/timbrar-aplicacion-anticipo-ruta"
+
+comando para cfdi ingreso : (solo se manda como argumento la ruta del archivo)
+curl -k -OJ --get --data-urlencode "ruta_xml=C:\Users\ismar\Downloads\ingreso.xml" "https://127.0.0.1:5001/timbrar-ingreso-ruta"
