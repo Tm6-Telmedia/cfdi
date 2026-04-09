@@ -169,7 +169,7 @@ def timbrar_complemento_pago2():
             return jsonify({
                 "success": False,
                 "error": error_timbrado
-            }), 400
+            }), 422
 
         respuesta = generar_xml_timbrado(cfdi_bytes)
 
@@ -490,7 +490,7 @@ def timbrar_aplicacion_anticipo():
         #  Extraer UUID del CFDI origen
         uuid_origen = extraer_uuid_cfdi(xml_cfdi_string)
         if not uuid_origen:
-            return jsonify({"success": False, "error": "No se encontró UUID en CFDI origen"}), 400
+            return jsonify({"success": False, "error": "No se encontró UUID en CFDI origen"}), 422
         
         #parsear XML FileMaker
         factura = parse_filemaker_xml(xml_filemaker_string)
@@ -522,7 +522,7 @@ def timbrar_aplicacion_anticipo():
             return jsonify({
                 "success": False,
                 "error": error_timbrado
-            }), 400
+            }), 422
 
         respuesta = generar_xml_timbrado(cfdi_bytes)
 
@@ -683,7 +683,7 @@ def timbrar_nomina():
             return jsonify({
                 "success": False,
                 "error": error_timbrado
-            }), 400
+            }), 422
 
         parseo_del_pac = generar_xml_timbrado(cfdi_bytes)
 
@@ -757,7 +757,7 @@ def timbrar_ingreso():
             return jsonify({
                 "success": False,
                 "error": error_timbrado
-            }), 400
+            }), 422
 
         parseo_del_pac = generar_xml_timbrado(cfdi_bytes)
 
@@ -811,7 +811,7 @@ def cancelar_cfdi():
         )
 
         if error:
-            return jsonify({"success": False, "error": error}), 400
+            return jsonify({"success": False, "error": error}), 422
 
         datos_cancelacion = parsear_mensaje_cancelacion(status["mensaje"])
         return jsonify({
@@ -962,7 +962,7 @@ def timbrar_aplicacion_anticipo_ruta():
 
         uuid_origen = extraer_uuid_cfdi(xml_cfdi_string)
         if not uuid_origen:
-            return jsonify({"success": False, "error": "No se encontró UUID en CFDI origen"}), 400
+            return jsonify({"success": False, "error": "No se encontró UUID en CFDI origen"}), 422
 
         factura = parse_filemaker_xml(xml_filemaker_string)
 
@@ -986,6 +986,7 @@ def timbrar_aplicacion_anticipo_ruta():
         xml_timbrado_tuple, _ = timbrar_con_pac(xml_bytes)
         xml_timbrado_result = generar_xml_timbrado(xml_timbrado_tuple)
 
+        print("Resultado PAC completo:", xml_timbrado_result)
         xml_timbrado_bytes = xml_timbrado_result["xml"].encode('utf-8')
 
         with open(ruta_xml_filemaker, 'rb') as file:
@@ -1030,7 +1031,7 @@ def cancelar_cfdi_ruta():
         rfc_emisor = request.args.get("rfc_emisor")
         motivo_cancelacion = request.args.get("motivo_cancelacion")
         uuid_sustituto = request.args.get("uuid_sustituto", "")
-        email = "ircasarreal@telmedia.com.mx"
+        email = "nombre@telmedia.com.mx"
 
         if not uuid or not motivo_cancelacion:
             return jsonify({"success": False, "error": "Faltan datos: uuid o motivo_cancelacion"}), 400
@@ -1053,7 +1054,7 @@ def cancelar_cfdi_ruta():
         )
 
         if error:
-            return jsonify({"success": False, "error": error}), 400
+            return jsonify({"success": False, "error": error}), 422
 
         datos_cancelacion = parsear_mensaje_cancelacion(status["mensaje"])
 
@@ -1119,7 +1120,7 @@ def timbrar_ingreso_ruta():
 
         cfdi_bytes, error_timbrado = timbrar_con_pac(xml_bytes)
         if error_timbrado:
-            return jsonify({"success": False, "error": error_timbrado}), 400
+            return jsonify({"success": False, "error": error_timbrado}), 422
 
         parseo_del_pac = generar_xml_timbrado(cfdi_bytes)
 
@@ -1152,4 +1153,5 @@ def timbrar_ingreso_ruta():
         }), 500
 
 if __name__ == "__main__":
-    app.run(host='0.0.0.0', port=5001, debug=True, ssl_context=context)
+    # app.run(host='0.0.0.0', port=5001, debug=True, ssl_context=context)
+    app.run(host='0.0.0.0', port=5001, debug=True)
