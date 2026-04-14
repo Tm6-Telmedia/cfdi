@@ -84,23 +84,28 @@ def timbrar_con_pac(xml_bytes: bytes):
         if result.status != 200:
             mensaje = getattr(result, 'mensaje', 'Error desconocido en el timbrado')
             print(f"ERROR DEL PAC: {mensaje}")
-            return None, mensaje
+            return {"cfdi": None, "cadena_original": "", "error": mensaje}
 
         #  Validar que existan resultados
         if not hasattr(result, 'resultados') or not result.resultados:
-            return None, "No se recibieron resultados del PAC"
+            print(" No se recibieron resultados del PAC")
+            return {"cfdi": None, "cadena_original": "", "error": "No se recibieron resultados del PAC"}
 
         primer_resultado = result.resultados[0]
+        print(" primer_resultado:", primer_resultado)
+        print(" cfdiTimbrado:", getattr(primer_resultado, 'cfdiTimbrado', 'NO EXISTE'))
+        print(" mensaje:", getattr(primer_resultado, 'mensaje', 'NO EXISTE'))
 
-        #  Si el PAC manda mensaje de error en el resultado
         if hasattr(primer_resultado, 'mensaje') and primer_resultado.mensaje:
             if not getattr(primer_resultado, 'cfdiTimbrado', None):
-                return None, f"El PAC retornó vacío: {primer_resultado.mensaje}"
+                print(" PAC retornó vacío:", primer_resultado.mensaje)
+                return {"cfdi": None, "cadena_original": "", "error": f"El PAC retornó vacío: {primer_resultado.mensaje}"}
 
         cfdi = primer_resultado.cfdiTimbrado
+        # print(" cfdi obtenido:", cfdi)
 
-        #  CFDI vacío
         if not cfdi:
+            print(" CFDI vacío")
             return None, "El PAC retornó un CFDI vacío"
 
         #  Convertir a bytes correctamente
@@ -114,18 +119,22 @@ def timbrar_con_pac(xml_bytes: bytes):
                 try:
                     cfdi_bytes = base64.b64decode(cfdi)
                 except Exception:
-                    return None, "No se pudo decodificar el CFDI retornado por el PAC"
+                    return {"cfdi": None, "cadena_original": "", "error": "No se pudo decodificar el CFDI retornado por el PAC"}
 
         else:
             cfdi_bytes = str(cfdi).encode('utf-8')
 
         print("TIMBRADO EXITOSO")
-        return cfdi_bytes, None
+        return {
+            "cfdi": cfdi_bytes,
+            "cadena_original": getattr(primer_resultado, 'cadenaOriginal', ''),
+            "error": None
+        }
 
     except Exception as e:
         error_msg = f"Error al conectar con el PAC: {str(e)}"
         print(error_msg)
-        return None, error_msg
+        return {"cfdi": None, "cadena_original": "", "error": error_msg}
 
 
 def generar_xml_timbrado(xml_timbrado: bytes):

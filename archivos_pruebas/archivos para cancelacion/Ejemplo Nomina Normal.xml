@@ -3,7 +3,7 @@
     xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
     xsi:schemaLocation="http://www.sat.gob.mx/cfd/4 http://www.sat.gob.mx/sitio_internet/cfd/4/cfdv40.xsd&#xA;
                         http://www.sat.gob.mx/nomina12 http://www.sat.gob.mx/sitio_internet/cfd/nomina/nomina12.xsd"
-    Version="4.0" Serie="NOMINA" Folio="4" Fecha="2026-03-05T13:07:28"
+    Version="4.0" Serie="NOMINA" Folio="4" Fecha="2026-04-13T13:07:28"
     SubTotal="5000" Descuento="300" Moneda="MXN" Total="4700" TipoDeComprobante="N" Exportacion="01"
     MetodoPago="PUE" LugarExpedicion="20000" xmlns:cfdi="http://www.sat.gob.mx/cfd/4">
     <cfdi:Emisor Rfc="EKU9003173C9" Nombre="ESCUELA KEMPER URGATE" RegimenFiscal="601" />

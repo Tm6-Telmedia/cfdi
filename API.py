@@ -163,7 +163,10 @@ def timbrar_complemento_pago2():
         guardar_xml(xml_bytes, tipo_comprobante="anticipo")
 
         #timbrar con pac
-        cfdi_bytes, error_timbrado = timbrar_con_pac(xml_bytes)
+        resultado_pac = timbrar_con_pac(xml_bytes)
+        error_timbrado = resultado_pac["error"]
+        cfdi_bytes = resultado_pac["cfdi"]
+        cadena_original = resultado_pac["cadena_original"]
 
         if error_timbrado:
             return jsonify({
@@ -515,8 +518,11 @@ def timbrar_aplicacion_anticipo():
         xml_bytes = xml_cfdi.encode("utf-8")
         guardar_xml(xml_bytes, tipo_comprobante="anticipo")
 
-        #timbrar con pac
-        cfdi_bytes, error_timbrado = timbrar_con_pac(xml_bytes) #bytes solo  es cfdi
+        #timbrar con pac, bytes solo  es cfdi
+        resultado_pac = timbrar_con_pac(xml_bytes)
+        error_timbrado = resultado_pac["error"]
+        cfdi_bytes = resultado_pac["cfdi"]
+        cadena_original = resultado_pac["cadena_original"]
 
         if error_timbrado:
             return jsonify({
@@ -677,8 +683,12 @@ def timbrar_nomina():
         xml_bytes = xml_sellado.encode("utf-8")
         guardar_xml(xml_bytes, tipo_comprobante="nomina")
 
-        #timbrar con pac
-        cfdi_bytes, error_timbrado = timbrar_con_pac(xml_bytes) #bytes solo  es cfdi - listo
+        #timbrar con pac bytes solo  es cfdi 
+        resultado_pac = timbrar_con_pac(xml_bytes)
+        error_timbrado = resultado_pac["error"]
+        cfdi_bytes = resultado_pac["cfdi"]
+        cadena_original = resultado_pac["cadena_original"]
+
         if error_timbrado:
             return jsonify({
                 "success": False,
@@ -751,8 +761,12 @@ def timbrar_ingreso():
         xml_bytes = xml_sellado.encode("utf-8")
         guardar_xml(xml_bytes, tipo_comprobante="nomina")
 
-        #timbrar con pac
-        cfdi_bytes, error_timbrado = timbrar_con_pac(xml_bytes) #bytes solo  es cfdi - listo
+        #timbrar con pac bytes solo  es cfdi - listo
+        resultado_pac = timbrar_con_pac(xml_bytes)
+        error_timbrado = resultado_pac["error"]
+        cfdi_bytes = resultado_pac["cfdi"]
+        cadena_original = resultado_pac["cadena_original"]
+
         if error_timbrado:
             return jsonify({
                 "success": False,
@@ -982,13 +996,36 @@ def timbrar_aplicacion_anticipo_ruta():
         xml_bytes = xml_cfdi.encode("utf-8")
         guardar_xml(xml_bytes, tipo_comprobante="anticipo")
 
-        # Fix: desempacar tupla
-        xml_timbrado_tuple, _ = timbrar_con_pac(xml_bytes)
+        resultado_pac = timbrar_con_pac(xml_bytes)
+        error_pac = resultado_pac["error"]
+        xml_timbrado_tuple = resultado_pac["cfdi"]
+        cadena_original = resultado_pac["cadena_original"]
+
+        if error_pac:
+            return jsonify({"success": False, "error": f"Error del PAC: {error_pac}"}), 422
+
         xml_timbrado_result = generar_xml_timbrado(xml_timbrado_tuple)
 
-        print("Resultado PAC completo:", xml_timbrado_result)
+        if not xml_timbrado_result.get("success", True) and "error" in xml_timbrado_result:
+            return jsonify({"success": False, "error": xml_timbrado_result["error"]}), 422
+
         xml_timbrado_bytes = xml_timbrado_result["xml"].encode('utf-8')
 
+        # Extraer datos del TFD
+        import xml.etree.ElementTree as ET
+        tfd_ns = {"tfd": "http://www.sat.gob.mx/TimbreFiscalDigital"}
+        root_timbrado = ET.fromstring(xml_timbrado_bytes)
+        tfd = root_timbrado.find(".//tfd:TimbreFiscalDigital", tfd_ns)
+
+        uuid            = tfd.get("UUID", "")
+        fecha_timbrado  = tfd.get("FechaTimbrado", "")
+        sello_cfdi      = tfd.get("SelloCFD", "")
+        sello_sat       = tfd.get("SelloSAT", "")
+        no_cert_sat     = tfd.get("NoCertificadoSAT", "")
+        rfc_prov_certif = tfd.get("RfcProvCertif", "")
+        no_cert_emisor  = root_timbrado.get("NoCertificado", "")
+
+        # Generar PDF
         with open(ruta_xml_filemaker, 'rb') as file:
             xml_filemaker_bytes = file.read()
 
@@ -1000,21 +1037,38 @@ def timbrar_aplicacion_anticipo_ruta():
 
         guardar_pdf(pdf_bytes, tipo_comprobante="anticipo")
 
-        fecha_actual = datetime.now().strftime("%Y%m%d_%H%M%S")
+        # Crear carpeta por factura
+        serie = factura["serie"]
+        folio = factura["folio"]
+        nombre_carpeta = f"{serie}_{folio}"
 
-        # Armar ZIP con PDF y XML
-        zip_buffer = io.BytesIO()
-        with zipfile.ZipFile(zip_buffer, 'w', zipfile.ZIP_DEFLATED) as zip_file:
-            zip_file.writestr(f"CFDI_Anticipo_{fecha_actual}.xml", xml_timbrado_bytes)
-            zip_file.writestr(f"CFDI_Anticipo_{fecha_actual}.pdf", pdf_bytes)
-        zip_buffer.seek(0)
+        carpeta_base = os.path.join(os.path.expanduser("~"), "OneDrive", "Escritorio", "fm", "cfdi", "timbrados", nombre_carpeta)
+        os.makedirs(carpeta_base, exist_ok=True)
 
-        return send_file(
-            zip_buffer,
-            mimetype="application/zip",
-            as_attachment=True,
-            download_name=f"CFDI_Anticipo_{fecha_actual}.zip"
-        )
+        # Guardar XML y PDF en la carpeta
+        ruta_xml_timbrado = os.path.join(carpeta_base, f"CFDI_{nombre_carpeta}.xml")
+        ruta_pdf          = os.path.join(carpeta_base, f"CFDI_{nombre_carpeta}.pdf")
+
+        with open(ruta_xml_timbrado, 'wb') as f:
+            f.write(xml_timbrado_bytes)
+
+        with open(ruta_pdf, 'wb') as f:
+            f.write(pdf_bytes)
+
+        return jsonify({
+            "success": True,
+            "mensaje": "Factura timbrada correctamente",
+            "uuid": uuid,
+            "fecha_timbrado": fecha_timbrado,
+            "sello_cfdi": sello_cfdi,
+            "sello_sat": sello_sat,
+            "no_certificado_sat": no_cert_sat,
+            "rfc_prov_certif": rfc_prov_certif,
+            "no_certificado_emisor": no_cert_emisor,
+            "cadena_original": cadena_original,
+            "ruta_xml": ruta_xml_timbrado,
+            "ruta_pdf": ruta_pdf
+        }), 200
 
     except Exception as e:
         import traceback
@@ -1153,5 +1207,5 @@ def timbrar_ingreso_ruta():
         }), 500
 
 if __name__ == "__main__":
-    # app.run(host='0.0.0.0', port=5001, debug=True, ssl_context=context)
-    app.run(host='0.0.0.0', port=5001, debug=True)
+    app.run(host='0.0.0.0', port=5001, debug=True, ssl_context=context)
+    # app.run(host='0.0.0.0', port=5001, debug=True)

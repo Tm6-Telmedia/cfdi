@@ -10,3 +10,7 @@ curl -k -OJ --get --data-urlencode "ruta_xml_anticipo="C:\Users\ismar\Downloads\
 
 comando para cfdi ingreso : (solo se manda como argumento la ruta del archivo)
 curl -k -OJ --get --data-urlencode "ruta_xml=C:\Users\ismar\Downloads\ingreso.xml" "https://127.0.0.1:5001/timbrar-ingreso-ruta"
+
+
+#en el navegador:
+https://127.0.0.1:5001/timbrar-aplicacion-anticipo-ruta?ruta_xml_anticipo=C:\Users\ismar\OneDrive\Escritorio\fm\cfdi\CFDI_C_2100.xml&ruta_xml_filemaker=C:\Users\ismar\OneDrive\Escritorio\fm\cfdi\SF_C_2171.xml
