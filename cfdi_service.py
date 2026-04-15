@@ -93,8 +93,8 @@ def timbrar_con_pac(xml_bytes: bytes):
 
         primer_resultado = result.resultados[0]
         print(" primer_resultado:", primer_resultado)
-        print(" cfdiTimbrado:", getattr(primer_resultado, 'cfdiTimbrado', 'NO EXISTE'))
-        print(" mensaje:", getattr(primer_resultado, 'mensaje', 'NO EXISTE'))
+        # print(" cfdiTimbrado:", getattr(primer_resultado, 'cfdiTimbrado', 'NO EXISTE'))
+        # print(" mensaje:", getattr(primer_resultado, 'mensaje', 'NO EXISTE'))
 
         if hasattr(primer_resultado, 'mensaje') and primer_resultado.mensaje:
             if not getattr(primer_resultado, 'cfdiTimbrado', None):

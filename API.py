@@ -14,6 +14,7 @@ from datetime import datetime
 # from cryptography.hazmat.backends import default_backend
 # from cryptography import x509
 import os
+import ctypes.wintypes
 from flask_cors import CORS
 from flask import send_file
 # from xml.dom.minidom import parseString
@@ -99,7 +100,7 @@ def guardar_pdf(pdf_bytes, tipo_comprobante):
     return nombre_archivo
 
 
-def generar_respuesta_dual(xml_timbrado, tipo_comprobante):
+def generar_respuesta_dual(xml_timbrado, tipo_comprobante, cad_original):
    
     try:
         
@@ -109,7 +110,7 @@ def generar_respuesta_dual(xml_timbrado, tipo_comprobante):
         error_pdf = None
         
         try:
-            pdf_bytes = generar_pdf_factura(xml_timbrado, tipo_comprobante)
+            pdf_bytes = generar_pdf_factura(xml_timbrado, tipo_comprobante,cad_original_pac=cad_original)
             nombre_pdf = guardar_pdf(pdf_bytes, tipo_comprobante)
         except PDFGenerationError as e:
             error_pdf = str(e)
@@ -184,7 +185,7 @@ def timbrar_complemento_pago2():
 
 
         # Generar respuesta dual (XML + PDF)
-        respuesta = generar_respuesta_dual(xml_timbrado_bytes, "P")
+        respuesta = generar_respuesta_dual(xml_timbrado_bytes, "P", cadena_original)
 
         return jsonify({
             "success": True,
@@ -546,7 +547,8 @@ def timbrar_aplicacion_anticipo():
         pdf_bytes = generar_pdf_factura(
             xml_timbrado=xml_timbrado_bytes,
             tipo_comprobante="I",
-            xml_anticipo=xml_filemaker_bytes
+            xml_anticipo=xml_filemaker_bytes,
+            cad_original_pac= cadena_original
         )
 
         # Convertir PDF a base64
@@ -704,7 +706,7 @@ def timbrar_nomina():
 
 
         # Generar respuesta dual (XML + PDF)
-        respuesta = generar_respuesta_dual(xml_timbrado_bytes, "Nomina")
+        respuesta = generar_respuesta_dual(xml_timbrado_bytes, "Nomina", cadena_original)
 
         return jsonify({
             "success": True,
@@ -781,7 +783,7 @@ def timbrar_ingreso():
         xml_timbrado_bytes = xml_timbrado_str.encode('utf-8')   
 
         # Generar respuesta dual (XML + PDF)
-        respuesta = generar_respuesta_dual(xml_timbrado_bytes, "Ingreso")
+        respuesta = generar_respuesta_dual(xml_timbrado_bytes, "Ingreso", cadena_original)
 
         return jsonify({
             "success": True,
@@ -1032,7 +1034,8 @@ def timbrar_aplicacion_anticipo_ruta():
         pdf_bytes = generar_pdf_factura(
             xml_timbrado=xml_timbrado_bytes,
             tipo_comprobante="I",
-            xml_anticipo=xml_filemaker_bytes
+            xml_anticipo=xml_filemaker_bytes,
+            cad_original_pac= cadena_original
         )
 
         guardar_pdf(pdf_bytes, tipo_comprobante="anticipo")
@@ -1042,12 +1045,14 @@ def timbrar_aplicacion_anticipo_ruta():
         folio = factura["folio"]
         nombre_carpeta = f"{serie}_{folio}"
 
-        carpeta_base = os.path.join(os.path.expanduser("~"), "OneDrive", "Escritorio", "fm", "cfdi", "timbrados", nombre_carpeta)
+        #obtener escritorio dinamicamente
+        escritorio = obtener_escritorio()
+
+        carpeta_base = os.path.join(escritorio, "fm", "cfdi", "timbrados", nombre_carpeta)
         os.makedirs(carpeta_base, exist_ok=True)
 
-        # Guardar XML y PDF en la carpeta
         ruta_xml_timbrado = os.path.join(carpeta_base, f"CFDI_{nombre_carpeta}.xml")
-        ruta_pdf          = os.path.join(carpeta_base, f"CFDI_{nombre_carpeta}.pdf")
+        ruta_pdf = os.path.join(carpeta_base, f"CFDI_{nombre_carpeta}.pdf")
 
         with open(ruta_xml_timbrado, 'wb') as f:
             f.write(xml_timbrado_bytes)
@@ -1077,6 +1082,20 @@ def timbrar_aplicacion_anticipo_ruta():
             "error": str(e),
             "traceback": traceback.format_exc()
         }), 500
+
+def obtener_escritorio():
+    CSIDL_DESKTOPDIRECTORY = 0x10
+    SHGFP_TYPE_CURRENT = 0
+
+    buf = ctypes.create_unicode_buffer(ctypes.wintypes.MAX_PATH)
+    ctypes.windll.shell32.SHGetFolderPathW(
+        None,
+        CSIDL_DESKTOPDIRECTORY,
+        None,
+        SHGFP_TYPE_CURRENT,
+        buf
+    )
+    return buf.value
 
 @app.route("/cancelar-cfdi-ruta", methods=["GET"])
 def cancelar_cfdi_ruta():

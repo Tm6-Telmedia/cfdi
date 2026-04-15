@@ -1041,7 +1041,7 @@ def generar_codigo_qr(cfdi_data: CFDIData) -> BytesIO:
         # Retornar QR vacío en caso de error
         return BytesIO()
 
-def generar_pdf_factura(xml_timbrado: bytes, tipo_comprobante: str, xml_anticipo: bytes = None) -> bytes:
+def generar_pdf_factura(xml_timbrado: bytes, tipo_comprobante: str, xml_anticipo: bytes = None, cad_original_pac: str = '') -> bytes:
     """
     Genera PDF de factura desde XML timbrado
     
@@ -1521,8 +1521,8 @@ def generar_pdf_factura(xml_timbrado: bytes, tipo_comprobante: str, xml_anticipo
         y_position -= 12  
         draw_text_with_style(c, 50, y_position, "Cadena original:", "Helvetica-Bold", 7)  
         rfc_prov_certif = cfdi_data.rfc_prov_certif if cfdi_data.rfc_prov_certif else "SAT970701NN3"
-        cadena_original = f"||1.1|{cfdi_data.uuid}|{cfdi_data.fecha_timbrado}|{rfc_prov_certif}|{cfdi_data.no_certificado_sat}||"
-        y_position = draw_multiline_text(c, 50, y_position - 8, cadena_original, 120, 6)
+        # cadena_original = f"||1.1|{cfdi_data.uuid}|{cfdi_data.fecha_timbrado}|{rfc_prov_certif}|{cfdi_data.no_certificado_sat}||"
+        y_position = draw_multiline_text(c, 50, y_position - 8, cad_original_pac, 120, 6)
         
         # Sello digital del CFDI 
         y_position -= 12  
