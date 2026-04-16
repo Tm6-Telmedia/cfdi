@@ -635,7 +635,7 @@ def parse_filemaker_xml(xml_str: str) -> dict:
     }
     return factura
 
-def crear_cfdi_desde_contexto(contexto: dict, certificado_path: str, key_path: str, password: str, xslt_path: str = None) -> str:
+def crear_cfdi_desde_contexto(contexto: dict, certificado_path: str, key_path: str, password: str, xslt_path: str = None) -> dict:
     uuid_origen = contexto.get("uuid_origen")
     factura = contexto.get("factura")
     
@@ -651,9 +651,11 @@ def crear_cfdi_desde_contexto(contexto: dict, certificado_path: str, key_path: s
     # print(f"xml_sinSellar: {xml_sin_sellar}")
     
     # Sellar el CFDI
-    xml_sellado = sellar_cfdi(xml_sin_sellar, llave_privada,certificado_base64, xslt_path)
+    resultado_de_sellar = sellar_cfdi(xml_sin_sellar, llave_privada,certificado_base64, xslt_path)
+    # xml_sellado = resultado_sellar["xml_sellado"]
+    # cadena_original = resultado_sellar["cadena_original"]
     
-    return xml_sellado
+    return resultado_de_sellar
 
 
 @app.route("/timbrar-nomina", methods=["POST"])
@@ -987,7 +989,7 @@ def timbrar_aplicacion_anticipo_ruta():
             "factura": factura
         }
 
-        xml_cfdi = crear_cfdi_desde_contexto(
+        contexto_result = crear_cfdi_desde_contexto(
             contexto=contexto,
             certificado_path=RUTA_CER,
             key_path=RUTA_KEY,
@@ -995,13 +997,15 @@ def timbrar_aplicacion_anticipo_ruta():
             xslt_path=RUTA_XSLT
         )
 
-        xml_bytes = xml_cfdi.encode("utf-8")
+        xml_bytes = contexto_result["xml_sellado"].encode("utf-8")
         guardar_xml(xml_bytes, tipo_comprobante="anticipo")
 
         resultado_pac = timbrar_con_pac(xml_bytes)
         error_pac = resultado_pac["error"]
         xml_timbrado_tuple = resultado_pac["cfdi"]
         cadena_original = resultado_pac["cadena_original"]
+        status_pac = resultado_pac["status_pac"]
+        mensaje_pac = resultado_pac["mensaje_pac"]
 
         if error_pac:
             return jsonify({"success": False, "error": f"Error del PAC: {error_pac}"}), 422
@@ -1062,7 +1066,8 @@ def timbrar_aplicacion_anticipo_ruta():
 
         return jsonify({
             "success": True,
-            "mensaje": "Factura timbrada correctamente",
+            "mensaje_pac": mensaje_pac,
+            "status_pac": status_pac,
             "uuid": uuid,
             "fecha_timbrado": fecha_timbrado,
             "sello_cfdi": sello_cfdi,
@@ -1072,7 +1077,8 @@ def timbrar_aplicacion_anticipo_ruta():
             "no_certificado_emisor": no_cert_emisor,
             "cadena_original": cadena_original,
             "ruta_xml": ruta_xml_timbrado,
-            "ruta_pdf": ruta_pdf
+            "ruta_pdf": ruta_pdf,
+            "cadena_original": contexto_result["cad_original_cfdi"]
         }), 200
 
     except Exception as e:

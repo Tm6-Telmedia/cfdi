@@ -126,6 +126,8 @@ def timbrar_con_pac(xml_bytes: bytes):
 
         print("TIMBRADO EXITOSO")
         return {
+            "mensaje_pac": primer_resultado.mensaje,
+            "status_pac" : result.status,
             "cfdi": cfdi_bytes,
             "cadena_original": getattr(primer_resultado, 'cadenaOriginal', ''),
             "error": None
@@ -285,7 +287,7 @@ def generar_xml_cfdi(factura: dict, uuid_origen: str, no_certificado, certificad
     return xml_str
 
 
-def sellar_cfdi(xml_sin_sellar: str, llave_privada, certificado_base64: str, xslt_path: str = None) -> str:
+def sellar_cfdi(xml_sin_sellar: str, llave_privada, certificado_base64: str, xslt_path: str = None) -> dict:
     """
     Genera la cadena original, sellarlo con la llave privada y agrega el sello al XML
     """
@@ -301,6 +303,8 @@ def sellar_cfdi(xml_sin_sellar: str, llave_privada, certificado_base64: str, xsl
         xslt = etree.parse(xslt_path)
         transform = etree.XSLT(xslt)
         cadena_original = str(transform(tree))
+        print("======================")
+        print(cadena_original)
     else:
         # Método simplificado (para desarrollo/pruebas)
         cadena_original = generar_cadena_original_simplificada(tree)
@@ -324,7 +328,10 @@ def sellar_cfdi(xml_sin_sellar: str, llave_privada, certificado_base64: str, xsl
         pretty_print=True
     ).decode('utf-8')
     
-    return xml_sellado
+    return {
+        "xml_sellado":xml_sellado,
+        "cad_original_cfdi": cadena_original
+    }
 
 
 """
@@ -345,6 +352,8 @@ def sellar_cfdi_complemento(xml_sin_sellar: str, llave_privada,  xslt_path: str 
         xslt = etree.parse(xslt_path)
         transform = etree.XSLT(xslt)
         cadena_original = str(transform(tree))
+        print("*******************************************************")
+        print(cadena_original)
     else:
         # Método simplificado (para desarrollo/pruebas)
         cadena_original = generar_cadena_original_simplificada(tree)
