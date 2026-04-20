@@ -957,30 +957,42 @@ def timbrar_complemento_pago_ruta():
 @app.route("/timbrar-aplicacion-anticipo-ruta", methods=["GET"])
 def timbrar_aplicacion_anticipo_ruta():
     try:
-        ruta_xml_anticipo = request.args.get("ruta_xml_anticipo")
+        uuid_cfdi = request.args.get("uuid_cfdi")
         ruta_xml_filemaker = request.args.get("ruta_xml_filemaker")
 
-        if not ruta_xml_anticipo:
-            return jsonify({"success": False, "error": "Falta el parámetro: ruta_xml_anticipo"}), 400
+         # --- Validar uuid_cfdi ---
+        regex_uuid = re.compile(
+            r'^[A-F0-9]{8}-[A-F0-9]{4}-[A-F0-9]{4}-[A-F0-9]{4}-[A-F0-9]{12}$',
+            re.IGNORECASE
+        )
+        if not uuid_cfdi or uuid_cfdi.strip() == '':
+            return jsonify({"success": False, "error": "El UUID está vacío. Debe ser válido."}), 400
+        if not regex_uuid.match(uuid_cfdi):
+            return jsonify({"success": False, "error": "El UUID no tiene el formato correcto."}), 400
+
+        # if not ruta_xml_anticipo:
+        #     return jsonify({"success": False, "error": "Falta el parámetro: ruta_xml_anticipo"}), 400
 
         if not ruta_xml_filemaker:
             return jsonify({"success": False, "error": "Falta el parámetro: ruta_xml_filemaker"}), 400
 
-        if not os.path.exists(ruta_xml_anticipo):
-            return jsonify({"success": False, "error": f"Archivo CFDI origen no encontrado: {ruta_xml_anticipo}"}), 404
+        # if not os.path.exists(ruta_xml_anticipo):
+        #     return jsonify({"success": False, "error": f"Archivo CFDI origen no encontrado: {ruta_xml_anticipo}"}), 404
 
         if not os.path.exists(ruta_xml_filemaker):
             return jsonify({"success": False, "error": f"Archivo FileMaker no encontrado: {ruta_xml_filemaker}"}), 404
 
-        with open(ruta_xml_anticipo, 'r', encoding='utf-8') as file:
-            xml_cfdi_string = file.read()
+        # with open(ruta_xml_anticipo, 'r', encoding='utf-8') as file:
+        #     xml_cfdi_string = file.read()
 
         with open(ruta_xml_filemaker, 'r', encoding='utf-8') as file:
             xml_filemaker_string = file.read()
 
-        uuid_origen = extraer_uuid_cfdi(xml_cfdi_string)
-        if not uuid_origen:
-            return jsonify({"success": False, "error": "No se encontró UUID en CFDI origen"}), 422
+        # uuid_origen = extraer_uuid_cfdi(xml_cfdi_string)
+        # if not uuid_origen:
+        #     return jsonify({"success": False, "error": "No se encontró UUID en CFDI origen"}), 422
+
+        uuid_origen = uuid_cfdi.strip().upper()
 
         factura = parse_filemaker_xml(xml_filemaker_string)
 

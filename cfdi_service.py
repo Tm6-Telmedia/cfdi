@@ -303,8 +303,7 @@ def sellar_cfdi(xml_sin_sellar: str, llave_privada, certificado_base64: str, xsl
         xslt = etree.parse(xslt_path)
         transform = etree.XSLT(xslt)
         cadena_original = str(transform(tree))
-        print("======================")
-        print(cadena_original)
+        # print(cadena_original)
     else:
         # Método simplificado (para desarrollo/pruebas)
         cadena_original = generar_cadena_original_simplificada(tree)
@@ -352,8 +351,8 @@ def sellar_cfdi_complemento(xml_sin_sellar: str, llave_privada,  xslt_path: str 
         xslt = etree.parse(xslt_path)
         transform = etree.XSLT(xslt)
         cadena_original = str(transform(tree))
-        print("*******************************************************")
-        print(cadena_original)
+        # print("*******************************************************")
+        # print(cadena_original)
     else:
         # Método simplificado (para desarrollo/pruebas)
         cadena_original = generar_cadena_original_simplificada(tree)
