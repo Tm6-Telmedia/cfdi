@@ -7,7 +7,7 @@ from lxml import etree
 import xml.etree.ElementTree as ET
 from io import BytesIO
 import base64
-from datetime import datetime
+from datetime import datetime, timedelta
 # from zeep import Client
 # from cryptography.hazmat.primitives import serialization, hashes
 # from cryptography.hazmat.primitives.asymmetric import padding
@@ -206,7 +206,8 @@ def timbrar_complemento_pago2():
 def parse_xml_complemento(xml_cfdi: str, forma_pago: str) -> dict:
     ns = {
         "cfdi": "http://www.sat.gob.mx/cfd/4",
-        "tfd": "http://www.sat.gob.mx/TimbreFiscalDigital"
+        "tfd": "http://www.sat.gob.mx/TimbreFiscalDigital",
+        "pago20": "http://www.sat.gob.mx/Pagos20",
     }
 
     root = ET.fromstring(xml_cfdi)
@@ -215,10 +216,11 @@ def parse_xml_complemento(xml_cfdi: str, forma_pago: str) -> dict:
     timbre_element = root.find('.//tfd:TimbreFiscalDigital', ns)
     if timbre_element is not None:
         uuid_factura = timbre_element.attrib['UUID']
-        # print(f" UUID extraído: {uuid_factura}")
     else:
-        # print("No se encontró TimbreFiscalDigital en el XML")
-        raise ValueError("No se encontró el UUID de la factura original. El XML debe contener un TimbreFiscalDigital.")
+        docto = root.find('.//pago20:DoctoRelacionado', ns)
+        if docto is None:
+            raise ValueError("No se encontró el UUID de la factura original.")
+        uuid_factura = docto.get('IdDocumento')
 
     #  ELIMINAR EL TIMBRE FISCAL (para evitar duplicados al re-timbrar)
     complemento_nodo = root.find('cfdi:Complemento', ns)
@@ -237,12 +239,25 @@ def parse_xml_complemento(xml_cfdi: str, forma_pago: str) -> dict:
     comprobante = root.attrib
     emisor = root.find('cfdi:Emisor', ns).attrib
     receptor = root.find('cfdi:Receptor', ns).attrib 
-    # timbre = root.find('.//tfd:TimbreFiscalDigital', ns).attrib
+    pago_nodo = root.find('.//pago20:Pago', ns)
+    moneda_pago = pago_nodo.get('MonedaP')  
+    monto_pago = float(pago_nodo.get('Monto'))
+    fecha_pago = pago_nodo.get('FechaPago')
 
     # Extraer Impuestos
-    impuestos_nodo = root.find('cfdi:Impuestos', ns)
-    traslados = impuestos_nodo.find('cfdi:Traslados', ns)
-    traslado = traslados.find('cfdi:Traslado', ns).attrib
+    # impuestos_nodo = root.find('cfdi:Impuestos', ns)
+    # traslados = impuestos_nodo.find('cfdi:Traslados', ns)
+    # traslado = traslados.find('cfdi:Traslado', ns).attrib
+
+    # Leer impuestos desde el nodo pago20
+    traslado_dr = root.find('.//pago20:TrasladoDR', ns)
+    traslado = {
+        'Base':        traslado_dr.get('BaseDR'),
+        'TasaOCuota':  traslado_dr.get('TasaOCuotaDR'),
+        'Importe':     traslado_dr.get('ImporteDR'),
+        'Impuesto':    traslado_dr.get('ImpuestoDR'),
+        'TipoFactor':  traslado_dr.get('TipoFactorDR'),
+    }
     
     # Extraer Concepto
     conceptos_nodo = root.find('cfdi:Conceptos', ns)
@@ -253,7 +268,7 @@ def parse_xml_complemento(xml_cfdi: str, forma_pago: str) -> dict:
     
     # Valores de la factura original - Nodo: Comprobante
     version_factura = comprobante.get('Version')
-    total_factura = float(comprobante['Total'])
+    # total_factura = float(comprobante['Total'])
     subtotal_factura = float(comprobante['SubTotal'])
     serie_factura = comprobante.get('Serie', '')
     folio_factura = comprobante.get('Folio', '')
@@ -267,15 +282,19 @@ def parse_xml_complemento(xml_cfdi: str, forma_pago: str) -> dict:
     certificado = comprobante.get('Certificado')
     no_certificado = comprobante.get('NoCertificado')
     
-    # Fecha actual 
-    # fecha_actual = datetime.now().strftime('%Y-%m-%dT%H:%M:%S')
-    # fecha_actual = "2026-01-08T13:12:50"
+    # Fecha actual menos 1 hora
+    fecha_actual = (datetime.now() - timedelta(hours=1)).strftime('%Y-%m-%dT%H:%M:%S')
     
     # Calcular valores del pago (asumiendo pago total)
-    monto_pago = total_factura
-    imp_saldo_ant = total_factura
-    imp_pagado = monto_pago
-    imp_saldo_insoluto = imp_saldo_ant - imp_pagado
+    # monto_pago = total_factura
+    # imp_saldo_ant = total_factura
+    # imp_pagado = monto_pago
+    # imp_saldo_insoluto = imp_saldo_ant - imp_pagado
+    docto_nodo = root.find('.//pago20:DoctoRelacionado', ns)
+    monto_pago     = float(pago_nodo.get('Monto'))
+    imp_saldo_ant  = float(docto_nodo.get('ImpSaldoAnt'))
+    imp_pagado     = float(docto_nodo.get('ImpPagado'))
+    imp_saldo_insoluto = float(docto_nodo.get('ImpSaldoInsoluto'))
     
     # Calcular impuestos proporcionales
     base_dr = float(traslado['Base'])
@@ -290,7 +309,7 @@ def parse_xml_complemento(xml_cfdi: str, forma_pago: str) -> dict:
             'Version': '4.0',
             'Serie': 'P',  # Puedes parametrizar esto
             'Folio': folio_factura,  # Asigna tu número de folio
-            'Fecha': fecha_factura,
+            'Fecha': fecha_actual,
             'SubTotal': '0',
             'Moneda': 'XXX',  #  Siempre xxx en complementos de pago
             'Total': '0',
@@ -339,9 +358,9 @@ def parse_xml_complemento(xml_cfdi: str, forma_pago: str) -> dict:
                 },
                 
                 'Pago': {
-                    'FechaPago': fecha_factura,
+                    'FechaPago': fecha_pago,
                     'FormaDePagoP': forma_pago,  # aqui va la seleccion pasada como argumento
-                    'MonedaP': moneda_original,
+                    'MonedaP': moneda_pago,
                     'TipoCambioP': '1',
                     'Monto': f'{monto_pago:.2f}',
 
@@ -361,7 +380,7 @@ def parse_xml_complemento(xml_cfdi: str, forma_pago: str) -> dict:
                         'IdDocumento': uuid_factura,
                         'Serie': serie_factura,
                         'Folio': folio_factura,
-                        'MonedaDR': moneda_original,
+                        'MonedaDR': moneda_pago,
                         'EquivalenciaDR': '1',
                         'NumParcialidad': '1',
                         'ImpSaldoAnt': f'{imp_saldo_ant:.2f}',

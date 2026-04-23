@@ -255,33 +255,22 @@ function validarEntradasXML(xmlDom) {
         
         xmlOriginal = xmlDoc;
 
-        const comprobante = xmlDoc.getElementsByTagName("cfdi:Comprobante")[0];
+        // Buscar el nodo pago20:Pago
+        const pagoNodo = xmlDoc.getElementsByTagNameNS("http://www.sat.gob.mx/Pagos20", "Pago")[0];
 
-        const impuestosDelComprobante = Array.from(comprobante.children).find(
-            child => child.tagName === 'cfdi:Impuestos'
-        );
-
-        if (!impuestosDelComprobante) {
-            alert("No se encontró el nodo de Impuestos a nivel de Comprobante");
+        if (!pagoNodo) {
+            alert("No se encontró el nodo pago20:Pago en el XML");
             return;
         }
 
-        const traslados = impuestosDelComprobante.getElementsByTagName("cfdi:Traslados")[0];
-        const trasladoGlobal = traslados.getElementsByTagName("cfdi:Traslado")[0];
-
-        const folio = comprobante.getAttribute("Folio") || "";
-        const fechaOriginal = comprobante.getAttribute("Fecha") || "";
-        const base = trasladoGlobal.getAttribute("Base") || "";
-        // console.log(base);
-        const importe = trasladoGlobal.getAttribute("Importe") || "";
-
+        const fechaPago = pagoNodo.getAttribute("FechaPago") || "";
         const section = document.querySelector('#xmlUnicoSection');
 
-        // FECHA Y HORA
+        // FECHA DE PAGO
         const lbFecha = document.createElement('label');
         lbFecha.classList.add('campo-label');
-        lbFecha.textContent = 'Fecha y Hora:';
-        let fechaParaInput = fechaOriginal ? fechaOriginal.substring(0, 16) : "";
+        lbFecha.textContent = 'Fecha de Pago:';
+        let fechaParaInput = fechaPago ? fechaPago.substring(0, 16) : "";
         const entradaFecha = document.createElement('input');
         entradaFecha.classList.add('entradas');
         entradaFecha.type = 'datetime-local';
@@ -290,50 +279,8 @@ function validarEntradasXML(xmlDom) {
         section.appendChild(entradaFecha);
         entradaFecha.addEventListener('input', () => {
             if (entradaFecha.value) {
-                comprobante.setAttribute("Fecha", entradaFecha.value + ":00");
+                pagoNodo.setAttribute("FechaPago", entradaFecha.value + ":00");
             }
-        });
-
-        // FOLIO
-        const lbFolio = document.createElement('label');
-        lbFolio.classList.add('campo-label');
-        lbFolio.textContent = 'Folio:';
-        const entradaFolio = document.createElement('input');
-        entradaFolio.classList.add('entradas');
-        entradaFolio.type = 'text';
-        entradaFolio.value = folio;
-        section.appendChild(lbFolio);
-        section.appendChild(entradaFolio);
-        entradaFolio.addEventListener('input', () => {
-            comprobante.setAttribute("Folio", entradaFolio.value);
-        });
-
-        // BASE
-        const lbBase = document.createElement('label');
-        lbBase.classList.add('campo-label');
-        lbBase.textContent = 'Base:';
-        const entradaBase = document.createElement('input');
-        entradaBase.classList.add('entradas');
-        entradaBase.type = 'text';
-        entradaBase.value = base;
-        section.appendChild(lbBase);
-        section.appendChild(entradaBase);
-        entradaBase.addEventListener('input', () => {
-            trasladoGlobal.setAttribute("Base", entradaBase.value);
-        });
-
-        // IMPORTE
-        const lbImporte = document.createElement('label');
-        lbImporte.classList.add('campo-label');
-        lbImporte.textContent = 'Importe:';
-        const entradaImporte = document.createElement('input');
-        entradaImporte.classList.add('entradas');
-        entradaImporte.type = 'text';
-        entradaImporte.value = importe;
-        section.appendChild(lbImporte);
-        section.appendChild(entradaImporte);
-        entradaImporte.addEventListener('input', () => {
-            trasladoGlobal.setAttribute("Importe", entradaImporte.value);
         });
     };
     
