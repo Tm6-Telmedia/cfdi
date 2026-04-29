@@ -14,3 +14,8 @@ curl -k -OJ --get --data-urlencode "ruta_xml=C:\Users\ismar\Downloads\ingreso.xm
 
 #en el navegador:
 https://127.0.0.1:5001/timbrar-aplicacion-anticipo-ruta?ruta_xml_anticipo=C:\Users\ismar\OneDrive\Escritorio\fm\cfdi\CFDI_C_2100.xml&ruta_xml_filemaker=C:\Users\ismar\OneDrive\Escritorio\fm\cfdi\SF_C_2171.xml
+
+// complemento de pago:
+// en el navegador
+
+https://127.0.0.1:5001/timbrar-complemento-pago-params?ruta_xml=C:/Users/ismar/OneDrive/Escritorio/fm/cfdi/timbrados/C_2171/CFDI_C_2171.xml&forma_pago=04&fecha_pago=2026-04-20T10:00:00&monto=34040.36&folio=2171&serie=P

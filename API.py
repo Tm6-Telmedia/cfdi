@@ -457,9 +457,24 @@ def crear_cfdi_complemento(complemento_dict: dict, no_certificado, certificado_b
     # Agregar Pago
     pago = ET.SubElement(pagos, '{http://www.sat.gob.mx/Pagos20}Pago')
     pago_data = complemento_dict['Complemento']['Pagos']['Pago']
-    for key, value in pago_data.items():
-        if key not in ['DoctoRelacionado', 'ImpuestosP'] and value is not None:
-            pago.set(key, str(value))
+
+    # Atributos obligatorios en orden
+    pago.set('FechaPago', str(pago_data['FechaPago']))
+    pago.set('FormaDePagoP', str(pago_data['FormaDePagoP']))
+    pago.set('MonedaP', str(pago_data['MonedaP']))
+    pago.set('TipoCambioP', str(pago_data['TipoCambioP']))
+    pago.set('Monto', str(pago_data['Monto']))
+
+    # Atributos opcionales en orden correcto
+    if pago_data.get('CuentaOrdenante'):
+        pago.set('CtaOrdenante', str(pago_data['CuentaOrdenante']))
+    if pago_data.get('CuentaBeneficiario'):
+        pago.set('CtaBeneficiario', str(pago_data['CuentaBeneficiario']))
+    # if pago_data.get('ReferenciaNumerica'):
+    #     pago.set('ReferenciaNumerica', str(pago_data['ReferenciaNumerica']))
+
+    if pago_data.get('ReferenciaNumerica'):
+        pago.set('NumOperacion', str(pago_data['ReferenciaNumerica']))
 
     # Agregar DoctoRelacionado
     docto = ET.SubElement(pago, '{http://www.sat.gob.mx/Pagos20}DoctoRelacionado')
@@ -907,17 +922,40 @@ def extraer_rfcEmisor_cfdi(xml_cfdi: str) -> str:
     return emisor.get("Rfc") if emisor is not None else None
 
 
-@app.route("/timbrar-complemento-pago-ruta", methods=["GET"])
-def timbrar_complemento_pago_ruta():
+@app.route("/timbrar-complemento-pago-params", methods=["GET"])
+def timbrar_complemento_pago_params():
     try:
+        # Parámetros requeridos
         ruta_xml = request.args.get("ruta_xml")
         forma_pago = request.args.get("forma_pago")
+        fecha_pago = request.args.get("fecha_pago")
+        monto = request.args.get("monto")
 
-        if not ruta_xml or not forma_pago:
+        print("Parámetros recibidos:")
+        print("ruta_xml:", request.args.get("ruta_xml"))
+        print("forma_pago:", request.args.get("forma_pago"))
+        print("fecha_pago:", request.args.get("fecha_pago"))
+        print("monto:", request.args.get("monto"))
+        print("URL completa:", request.url)
+
+        if not all([ruta_xml, forma_pago, fecha_pago, monto]):
             return jsonify({
                 "success": False,
-                "error": "Faltan parámetros: ruta_xml y forma_pago"
+                "error": "Faltan parámetros requeridos: ruta_xml, forma_pago, fecha_pago, monto"
             }), 400
+
+        # Parámetros opcionales
+        moneda = request.args.get("moneda", "MXN")
+        serie = request.args.get("serie", "P")
+        folio = request.args.get("folio", "")
+        cuenta_ordenante = request.args.get("cuenta_ordenante", "")
+        cuenta_receptora = request.args.get("cuenta_receptora", "")
+        referencia = request.args.get("referencia", "")
+        num_parcialidad = request.args.get("num_parcialidad", "1")
+        d_lugar_expedicion = request.args.get("d_lugar_expedicion", "")
+        d_objeto_impuesto = request.args.get("d_objeto_impuesto", "02")
+        saldo_anterior = request.args.get("saldo_anterior", "")
+        saldo_insoluto = request.args.get("saldo_insoluto", "")
 
         if not os.path.exists(ruta_xml):
             return jsonify({
@@ -928,41 +966,102 @@ def timbrar_complemento_pago_ruta():
         with open(ruta_xml, 'r', encoding='utf-8') as file:
             xml_cfdi_string = file.read()
 
+        # Parsear XML con los parámetros del pago
+        factura = parse_xml_complemento_params(
+            xml_cfdi=xml_cfdi_string,
+            forma_pago=forma_pago,
+            fecha_pago=fecha_pago,
+            monto=float(monto),
+            moneda=moneda,
+            serie=serie,
+            folio=folio,
+            cuenta_ordenante=cuenta_ordenante,
+            cuenta_receptora=cuenta_receptora,
+            referencia=referencia,
+            num_parcialidad=num_parcialidad,
+            d_lugar_expedicion=d_lugar_expedicion,
+            d_objeto_impuesto=d_objeto_impuesto,
+            saldo_anterior=float(saldo_anterior) if saldo_anterior else None,
+            saldo_insoluto=float(saldo_insoluto) if saldo_insoluto else None
+        )
+
         # Proceso de timbrado
-        factura = parse_xml_complemento(xml_cfdi_string, forma_pago)
         llave_privada = cargar_llave_privada(RUTA_KEY, PASSWORD_KEY)
         certificado_base64, no_certificado = cargar_certificado(RUTA_CER)
+        
+
         xml_sin_sellar = crear_cfdi_complemento(factura, no_certificado, certificado_base64)
         xml_sellado = sellar_cfdi_complemento(xml_sin_sellar, llave_privada, RUTA_XSLT)
 
-        xml_bytes = xml_sellado.encode("utf-8")
-        guardar_xml(xml_bytes, tipo_comprobante="anticipo")
+        # print("XML completo antes de timbrar:\n", xml_sellado) 
 
-        xml_timbrado_tuple, _ = timbrar_con_pac(xml_bytes)
+
+        xml_bytes = xml_sellado.encode("utf-8")
+        guardar_xml(xml_bytes, tipo_comprobante="complemento")
+
+        resultado_pac = timbrar_con_pac(xml_bytes)
+        error_pac = resultado_pac["error"]
+        xml_timbrado_tuple = resultado_pac["cfdi"]
+        cadena_original = resultado_pac["cadena_original"]
+
+        if error_pac:
+            return jsonify({"success": False, "error": f"Error del PAC: {error_pac}"}), 422
+
         xml_timbrado_result = generar_xml_timbrado(xml_timbrado_tuple)
 
+        if not xml_timbrado_result.get("success", True) and "error" in xml_timbrado_result:
+            return jsonify({"success": False, "error": xml_timbrado_result["error"]}), 422
+
         xml_timbrado_bytes = xml_timbrado_result["xml"].encode('utf-8')
-        respuesta_dual = generar_respuesta_dual(xml_timbrado_bytes, "P")
 
-        # Armar ZIP con PDF y XML
-        pdf_bytes = base64.b64decode(respuesta_dual["pdf"])
-        pdf_filename = respuesta_dual["pdf_filename"]
-        xml_filename = pdf_filename.replace(".pdf", ".xml")
+        # Extraer datos del TFD
+        tfd_ns = {"tfd": "http://www.sat.gob.mx/TimbreFiscalDigital"}
+        root_timbrado = ET.fromstring(xml_timbrado_bytes)
+        tfd = root_timbrado.find(".//tfd:TimbreFiscalDigital", tfd_ns)
 
-        zip_buffer = io.BytesIO()
-        with zipfile.ZipFile(zip_buffer, 'w', zipfile.ZIP_DEFLATED) as zip_file:
-            zip_file.writestr(xml_filename, xml_timbrado_bytes)
-            zip_file.writestr(pdf_filename, pdf_bytes)
-        zip_buffer.seek(0)
+        uuid            = tfd.get("UUID", "")
+        fecha_timbrado  = tfd.get("FechaTimbrado", "")
+        sello_cfdi      = tfd.get("SelloCFD", "")
+        sello_sat       = tfd.get("SelloSAT", "")
+        no_cert_sat     = tfd.get("NoCertificadoSAT", "")
+        rfc_prov_certif = tfd.get("RfcProvCertif", "")
+        no_cert_emisor  = root_timbrado.get("NoCertificado", "")
 
-        zip_filename = pdf_filename.replace(".pdf", ".zip")
-
-        return send_file(
-            zip_buffer,
-            mimetype="application/zip",
-            as_attachment=True,
-            download_name=zip_filename
+        # Generar PDF
+        pdf_bytes = generar_pdf_factura(
+            xml_timbrado=xml_timbrado_bytes,
+            tipo_comprobante="P"
         )
+        guardar_pdf(pdf_bytes, tipo_comprobante="complemento")
+
+        # Crear carpeta por folio
+        nombre_carpeta = f"{serie}_{folio}"
+        carpeta_base = os.path.join(os.path.expanduser("~"), "OneDrive", "Escritorio", "fm", "cfdi", "timbrados", nombre_carpeta)
+        os.makedirs(carpeta_base, exist_ok=True)
+
+        ruta_xml_timbrado = os.path.join(carpeta_base, f"CFDI_{nombre_carpeta}.xml")
+        ruta_pdf = os.path.join(carpeta_base, f"CFDI_{nombre_carpeta}.pdf")
+
+        with open(ruta_xml_timbrado, 'wb') as f:
+            f.write(xml_timbrado_bytes)
+
+        with open(ruta_pdf, 'wb') as f:
+            f.write(pdf_bytes)
+
+        return jsonify({
+            "success": True,
+            "mensaje": "Complemento de pago timbrado correctamente",
+            "uuid": uuid,
+            "fecha_timbrado": fecha_timbrado,
+            "sello_cfdi": sello_cfdi,
+            "sello_sat": sello_sat,
+            "no_certificado_sat": no_cert_sat,
+            "rfc_prov_certif": rfc_prov_certif,
+            "no_certificado_emisor": no_cert_emisor,
+            "cadena_original": cadena_original,
+            "ruta_xml": ruta_xml_timbrado,
+            "ruta_pdf": ruta_pdf
+        }), 200
 
     except Exception as e:
         import traceback
@@ -973,45 +1072,200 @@ def timbrar_complemento_pago_ruta():
         }), 500
 
 
+def parse_xml_complemento_params(xml_cfdi: str, forma_pago: str, fecha_pago: str,
+                                  monto: float, moneda: str, serie: str, folio: str,
+                                  cuenta_ordenante: str, cuenta_receptora: str,
+                                  referencia: str, num_parcialidad: str,
+                                  d_lugar_expedicion: str, d_objeto_impuesto: str,
+                                  saldo_anterior: float, saldo_insoluto: float) -> dict:
+    ns = {
+        "cfdi": "http://www.sat.gob.mx/cfd/4",
+        "tfd": "http://www.sat.gob.mx/TimbreFiscalDigital"
+    }
+
+    root = ET.fromstring(xml_cfdi)
+
+    # Extraer UUID
+    timbre_element = root.find('.//tfd:TimbreFiscalDigital', ns)
+    if timbre_element is not None:
+        uuid_factura = timbre_element.attrib['UUID']
+    else:
+        raise ValueError("No se encontró el UUID de la factura original.")
+
+    # Eliminar timbre para evitar duplicados
+    complemento_nodo = root.find('cfdi:Complemento', ns)
+    if complemento_nodo is not None:
+        timbre_nodo = complemento_nodo.find('tfd:TimbreFiscalDigital', ns)
+        if timbre_nodo is not None:
+            complemento_nodo.remove(timbre_nodo)
+            if len(complemento_nodo) == 0:
+                root.remove(complemento_nodo)
+
+    # Extraer datos fijos del XML
+    comprobante = root.attrib
+    emisor = root.find('cfdi:Emisor', ns).attrib
+    receptor = root.find('cfdi:Receptor', ns).attrib
+
+    # Fecha actual menos 1 hora
+    fecha_actual = (datetime.now() - timedelta(hours=1)).strftime('%Y-%m-%dT%H:%M:%S')
+
+    impuestos_nodo = root.find('cfdi:Impuestos', ns)
+    traslados = impuestos_nodo.find('cfdi:Traslados', ns)
+    traslado = traslados.find('cfdi:Traslado', ns).attrib
+
+    exportacion_factura = comprobante.get('Exportacion', '01')
+    lugar_expedicion = d_lugar_expedicion or comprobante.get('LugarExpedicion', '')
+    moneda_original = moneda
+    serie_factura = comprobante.get('Serie', '')
+    folio_factura = folio or comprobante.get('Folio', '')
+
+    base_dr = float(traslado['Base'])
+    tasa_dr = traslado['TasaOCuota']
+    importe_dr = float(traslado['Importe'])
+    impuesto_tipo = traslado['Impuesto']
+    tipo_factor = traslado['TipoFactor']
+
+    # Calcular saldos si no se pasaron
+    total_factura = float(comprobante['Total'])
+    imp_saldo_ant = saldo_anterior if saldo_anterior is not None else total_factura
+    imp_pagado = monto
+    imp_saldo_insoluto = saldo_insoluto if saldo_insoluto is not None else (imp_saldo_ant - imp_pagado)
+
+    # Calcular impuestos proporcionales al monto pagado
+    proporcion = monto / total_factura if total_factura > 0 else 1
+    base_pago = round(base_dr * proporcion, 2)
+    importe_pago = round(importe_dr * proporcion, 2)
+
+    pago_dict = {
+        'FechaPago': fecha_pago,
+        'FormaDePagoP': forma_pago,
+        'MonedaP': moneda_original,
+        'TipoCambioP': '1',
+        'Monto': f'{monto:.2f}',
+    }
+
+    # Agregar campos opcionales en el orden correcto ANTES de ImpuestosP
+    if cuenta_ordenante:
+        pago_dict['CuentaOrdenante'] = cuenta_ordenante
+    if cuenta_receptora:
+        pago_dict['CuentaBeneficiario'] = cuenta_receptora
+    if referencia:
+        pago_dict['ReferenciaNumerica'] = referencia
+
+    # Agregar ImpuestosP y DoctoRelacionado al final
+    pago_dict['ImpuestosP'] = {
+        'TrasladosP': [
+            {
+                'BaseP': f'{base_pago:.2f}',
+                'ImpuestoP': impuesto_tipo,
+                'TipoFactorP': tipo_factor,
+                'TasaOCuotaP': f'{float(tasa_dr):.6f}',
+                'ImporteP': f'{importe_pago:.2f}'
+            }
+        ]
+    }
+
+    pago_dict['DoctoRelacionado'] = {
+        'IdDocumento': uuid_factura,
+        'Serie': serie_factura,
+        'Folio': folio_factura,
+        'MonedaDR': moneda_original,
+        'EquivalenciaDR': '1',
+        'NumParcialidad': num_parcialidad,
+        'ImpSaldoAnt': f'{imp_saldo_ant:.2f}',
+        'ImpPagado': f'{imp_pagado:.2f}',
+        'ImpSaldoInsoluto': f'{imp_saldo_insoluto:.2f}',
+        'ObjetoImpDR': d_objeto_impuesto,
+        'ImpuestosDR': {
+            'TrasladosDR': [
+                {
+                    'BaseDR': f'{base_pago:.2f}',
+                    'ImpuestoDR': impuesto_tipo,
+                    'TipoFactorDR': tipo_factor,
+                    'TasaOCuotaDR': f'{float(tasa_dr):.6f}',
+                    'ImporteDR': f'{importe_pago:.2f}'
+                }
+            ]
+        }
+    }
+
+
+    return {
+        'Comprobante': {
+            'Version': '4.0',
+            'Serie': serie,
+            'Folio': folio_factura,
+            'Fecha': fecha_actual,
+            'SubTotal': '0',
+            'Moneda': 'XXX',
+            'Total': '0',
+            'TipoDeComprobante': 'P',
+            'Exportacion': exportacion_factura,
+            'LugarExpedicion': lugar_expedicion
+        },
+        'Emisor': {
+            'Rfc': emisor.get('Rfc'),
+            'Nombre': emisor.get('Nombre'),
+            'RegimenFiscal': emisor.get('RegimenFiscal')
+        },
+        'Receptor': {
+            'Rfc': receptor.get('Rfc'),
+            'Nombre': receptor.get('Nombre'),
+            'DomicilioFiscalReceptor': receptor.get('DomicilioFiscalReceptor'),
+            'RegimenFiscalReceptor': receptor.get('RegimenFiscalReceptor'),
+            'UsoCFDI': 'CP01'
+        },
+        'Conceptos': {
+            'Concepto': {
+                'ClaveProdServ': '84111506',
+                'Cantidad': '1',
+                'ClaveUnidad': 'ACT',
+                'Descripcion': 'Pago',
+                'ValorUnitario': '0',
+                'Importe': '0',
+                'ObjetoImp': '01'
+            }
+        },
+        'Complemento': {
+            'Pagos': {
+                'Version': '2.0',
+                'Totales': {
+                    'MontoTotalPagos': f'{monto:.2f}',
+                    'TotalTrasladosBaseIVA16': f'{base_pago:.2f}',
+                    'TotalTrasladosImpuestoIVA16': f'{importe_pago:.2f}'
+                },
+                'Pago': pago_dict
+            }
+        }
+    }
+
 @app.route("/timbrar-aplicacion-anticipo-ruta", methods=["GET"])
 def timbrar_aplicacion_anticipo_ruta():
     try:
-        uuid_cfdi = request.args.get("uuid_cfdi")
+        ruta_xml_anticipo = request.args.get("ruta_xml_anticipo")
         ruta_xml_filemaker = request.args.get("ruta_xml_filemaker")
 
-         # --- Validar uuid_cfdi ---
-        regex_uuid = re.compile(
-            r'^[A-F0-9]{8}-[A-F0-9]{4}-[A-F0-9]{4}-[A-F0-9]{4}-[A-F0-9]{12}$',
-            re.IGNORECASE
-        )
-        if not uuid_cfdi or uuid_cfdi.strip() == '':
-            return jsonify({"success": False, "error": "El UUID está vacío. Debe ser válido."}), 400
-        if not regex_uuid.match(uuid_cfdi):
-            return jsonify({"success": False, "error": "El UUID no tiene el formato correcto."}), 400
-
-        # if not ruta_xml_anticipo:
-        #     return jsonify({"success": False, "error": "Falta el parámetro: ruta_xml_anticipo"}), 400
+        if not ruta_xml_anticipo:
+            return jsonify({"success": False, "error": "Falta el parámetro: ruta_xml_anticipo"}), 400
 
         if not ruta_xml_filemaker:
             return jsonify({"success": False, "error": "Falta el parámetro: ruta_xml_filemaker"}), 400
 
-        # if not os.path.exists(ruta_xml_anticipo):
-        #     return jsonify({"success": False, "error": f"Archivo CFDI origen no encontrado: {ruta_xml_anticipo}"}), 404
+        if not os.path.exists(ruta_xml_anticipo):
+            return jsonify({"success": False, "error": f"Archivo CFDI origen no encontrado: {ruta_xml_anticipo}"}), 404
 
         if not os.path.exists(ruta_xml_filemaker):
             return jsonify({"success": False, "error": f"Archivo FileMaker no encontrado: {ruta_xml_filemaker}"}), 404
 
-        # with open(ruta_xml_anticipo, 'r', encoding='utf-8') as file:
-        #     xml_cfdi_string = file.read()
+        with open(ruta_xml_anticipo, 'r', encoding='utf-8') as file:
+            xml_cfdi_string = file.read()
 
         with open(ruta_xml_filemaker, 'r', encoding='utf-8') as file:
             xml_filemaker_string = file.read()
 
-        # uuid_origen = extraer_uuid_cfdi(xml_cfdi_string)
-        # if not uuid_origen:
-        #     return jsonify({"success": False, "error": "No se encontró UUID en CFDI origen"}), 422
-
-        uuid_origen = uuid_cfdi.strip().upper()
+        uuid_origen = extraer_uuid_cfdi(xml_cfdi_string)
+        if not uuid_origen:
+            return jsonify({"success": False, "error": "No se encontró UUID en CFDI origen"}), 422
 
         factura = parse_filemaker_xml(xml_filemaker_string)
 
