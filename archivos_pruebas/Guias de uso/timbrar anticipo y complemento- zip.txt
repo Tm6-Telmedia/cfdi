@@ -19,3 +19,23 @@ https://127.0.0.1:5001/timbrar-aplicacion-anticipo-ruta?ruta_xml_anticipo=C:\Use
 // en el navegador
 
 https://127.0.0.1:5001/timbrar-complemento-pago-params?ruta_xml=C:/Users/ismar/OneDrive/Escritorio/fm/cfdi/timbrados/C_2171/CFDI_C_2171.xml&forma_pago=04&fecha_pago=2026-04-20T10:00:00&monto=34040.36&folio=2171&serie=P
+
+
+
+https://127.0.0.1:5001/timbrar-complemento-pago-params?ruta_xml=C:/Users/ismar/OneDrive/Escritorio/fm/cfdi/timbrados/C_2171/CFDI_C_2171.xml&forma_pago=03&fecha_pago=2026-04-27T14:45:00&monto=34040.36&folio=2171&serie=P&num_parcialidad=1&saldo_anterior=34040.36&saldo_insoluto=0.00&d_lugar_expedicion=62100&d_objeto_impuesto=02&cuenta_ordenante=1234567890&cuenta_receptora=0987654321&referencia=REF001
+
+Fecha pago4/28/2026 10:00:00 AM
+Monto 34040.36
+Moneda MXN
+Cuenta Ordenante 1234567890
+Cuenta Receptora
+1234567890
+Referencia REF001
+Num. Parcialidad 1
+d_lugar_expedicion 62100
+d_objeto_impuesto 02
+Forma de Pago 03
+n_saldo_anterior 34040.36
+n_saldo_insoluto 0.00
+Serie P
+Folio 2171
