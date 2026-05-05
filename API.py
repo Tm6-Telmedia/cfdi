@@ -1035,8 +1035,14 @@ def timbrar_complemento_pago_params():
         guardar_pdf(pdf_bytes, tipo_comprobante="complemento")
 
         # Crear carpeta por folio
+        serie = factura["Comprobante"]["Serie"]
+        folio = factura["Comprobante"]["Folio"]
         nombre_carpeta = f"{serie}_{folio}"
-        carpeta_base = os.path.join(os.path.expanduser("~"), "OneDrive", "Escritorio", "fm", "cfdi", "timbrados", nombre_carpeta)
+
+        #obtener escritorio dinamicamente
+        escritorio = obtener_escritorio()
+
+        carpeta_base = os.path.join(escritorio, "fm", "cfdi", "timbrados", nombre_carpeta)
         os.makedirs(carpeta_base, exist_ok=True)
 
         ruta_xml_timbrado = os.path.join(carpeta_base, f"CFDI_{nombre_carpeta}.xml")
