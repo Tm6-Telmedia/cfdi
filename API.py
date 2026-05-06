@@ -922,46 +922,49 @@ def extraer_rfcEmisor_cfdi(xml_cfdi: str) -> str:
     return emisor.get("Rfc") if emisor is not None else None
 
 
-@app.route("/timbrar-complemento-pago-params", methods=["GET"])
+@app.route("/timbrar-complemento-pago-params", methods=["POST"])
 def timbrar_complemento_pago_params():
     try:
+
+        # file = request.files.get("file")
+        xml_base64 = request.form.get("xml_base64")
+
+        escritorio = obtener_escritorio()
+        carpeta_destino = os.path.join(escritorio, "fm", "cfdi")
+        os.makedirs(carpeta_destino, exist_ok=True)
+
+        if xml_base64:
+            import base64
+            xml_bytes_decoded = base64.b64decode(xml_base64)
+            nombre_archivo = request.form.get("nombre_archivo", "temp_cfdi.xml")
+            ruta_xml = os.path.join(carpeta_destino, nombre_archivo)
+            with open(ruta_xml, 'wb') as f:
+                f.write(xml_bytes_decoded)
+
         # Parámetros requeridos
-        ruta_xml = request.args.get("ruta_xml")
-        forma_pago = request.args.get("forma_pago")
-        fecha_pago = request.args.get("fecha_pago")
-        monto = request.args.get("monto")
+        # ruta_xml = request.args.get("ruta_xml")
+        forma_pago = request.form.get("forma_pago")
+        fecha_pago = request.form.get("fecha_pago")
+        monto = request.form.get("monto")
 
-        print("Parámetros recibidos:")
-        print("ruta_xml:", request.args.get("ruta_xml"))
-        print("forma_pago:", request.args.get("forma_pago"))
-        print("fecha_pago:", request.args.get("fecha_pago"))
-        print("monto:", request.args.get("monto"))
-        print("URL completa:", request.url)
-
-        if not all([ruta_xml, forma_pago, fecha_pago, monto]):
+        if not all([ xml_base64,forma_pago, fecha_pago, monto]):
             return jsonify({
                 "success": False,
-                "error": "Faltan parámetros requeridos: ruta_xml, forma_pago, fecha_pago, monto"
+                "error": "Faltan parámetros requeridos: xml, forma_pago, fecha_pago, monto"
             }), 400
 
         # Parámetros opcionales
-        moneda = request.args.get("moneda", "MXN")
-        serie = request.args.get("serie", "P")
-        folio = request.args.get("folio", "")
-        cuenta_ordenante = request.args.get("cuenta_ordenante", "")
-        cuenta_receptora = request.args.get("cuenta_receptora", "")
-        referencia = request.args.get("referencia", "")
-        num_parcialidad = request.args.get("num_parcialidad", "1")
-        d_lugar_expedicion = request.args.get("d_lugar_expedicion", "")
-        d_objeto_impuesto = request.args.get("d_objeto_impuesto", "02")
-        saldo_anterior = request.args.get("saldo_anterior", "")
-        saldo_insoluto = request.args.get("saldo_insoluto", "")
-
-        if not os.path.exists(ruta_xml):
-            return jsonify({
-                "success": False,
-                "error": f"Archivo no encontrado: {ruta_xml}"
-            }), 404
+        moneda = request.form.get("moneda", "MXN")
+        serie = request.form.get("serie", "P")
+        folio = request.form.get("folio", "")
+        cuenta_ordenante = request.form.get("cuenta_ordenante", "")
+        cuenta_receptora = request.form.get("cuenta_receptora", "")
+        referencia = request.form.get("referencia", "")
+        num_parcialidad = request.form.get("num_parcialidad", "1")
+        d_lugar_expedicion = request.form.get("d_lugar_expedicion", "")
+        d_objeto_impuesto = request.form.get("d_objeto_impuesto", "02")
+        saldo_anterior = request.form.get("saldo_anterior", "")
+        saldo_insoluto = request.form.get("saldo_insoluto", "")
 
         with open(ruta_xml, 'r', encoding='utf-8') as file:
             xml_cfdi_string = file.read()
@@ -988,13 +991,11 @@ def timbrar_complemento_pago_params():
         # Proceso de timbrado
         llave_privada = cargar_llave_privada(RUTA_KEY, PASSWORD_KEY)
         certificado_base64, no_certificado = cargar_certificado(RUTA_CER)
-        
 
         xml_sin_sellar = crear_cfdi_complemento(factura, no_certificado, certificado_base64)
         xml_sellado = sellar_cfdi_complemento(xml_sin_sellar, llave_privada, RUTA_XSLT)
 
         # print("XML completo antes de timbrar:\n", xml_sellado) 
-
 
         xml_bytes = xml_sellado.encode("utf-8")
         guardar_xml(xml_bytes, tipo_comprobante="complemento")
@@ -1037,22 +1038,22 @@ def timbrar_complemento_pago_params():
         # Crear carpeta por folio
         serie = factura["Comprobante"]["Serie"]
         folio = factura["Comprobante"]["Folio"]
-        nombre_carpeta = f"{serie}_{folio}"
+        nombre_archivo = f"{serie}_{folio}"
 
-        #obtener escritorio dinamicamente
-        escritorio = obtener_escritorio()
+        # #obtener escritorio dinamicamente
+        # escritorio = obtener_escritorio()
 
-        carpeta_base = os.path.join(escritorio, "fm", "cfdi", "timbrados", nombre_carpeta)
-        os.makedirs(carpeta_base, exist_ok=True)
+        # carpeta_base = os.path.join(escritorio, "fm", "cfdi", "timbrados", nombre_carpeta)
+        # os.makedirs(carpeta_base, exist_ok=True)
 
-        ruta_xml_timbrado = os.path.join(carpeta_base, f"CFDI_{nombre_carpeta}.xml")
-        ruta_pdf = os.path.join(carpeta_base, f"CFDI_{nombre_carpeta}.pdf")
+        # ruta_xml_timbrado = os.path.join(carpeta_base, f"CFDI_{nombre_carpeta}.xml")
+        # ruta_pdf = os.path.join(carpeta_base, f"CFDI_{nombre_carpeta}.pdf")
 
-        with open(ruta_xml_timbrado, 'wb') as f:
-            f.write(xml_timbrado_bytes)
+        # with open(ruta_xml_timbrado, 'wb') as f:
+        #     f.write(xml_timbrado_bytes)
 
-        with open(ruta_pdf, 'wb') as f:
-            f.write(pdf_bytes)
+        # with open(ruta_pdf, 'wb') as f:
+        #     f.write(pdf_bytes)
 
         return jsonify({
             "success": True,
@@ -1065,8 +1066,10 @@ def timbrar_complemento_pago_params():
             "rfc_prov_certif": rfc_prov_certif,
             "no_certificado_emisor": no_cert_emisor,
             "cadena_original": cadena_original,
-            "ruta_xml": ruta_xml_timbrado,
-            "ruta_pdf": ruta_pdf
+            "xml_timbrado_base64": base64.b64encode(xml_timbrado_bytes).decode('utf-8'),
+            "pdf_base64": base64.b64encode(pdf_bytes).decode('utf-8'),
+            "nombre_xml": f"CFDI_{nombre_archivo}.xml",
+            "nombre_pdf": f"CFDI_{nombre_archivo}.pdf"
         }), 200
 
     except Exception as e:
