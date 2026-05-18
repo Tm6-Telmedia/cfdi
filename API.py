@@ -609,63 +609,153 @@ def extraer_uuid_cfdi(xml_cfdi: str) -> str:
     timbre = root.find(".//tfd:TimbreFiscalDigital", ns)
     return timbre.attrib.get("UUID") if timbre is not None else None
 
+# def parse_filemaker_xml(xml_str: str) -> dict:
+#     ns = {"fm": "http://www.filemaker.com/fmpdsoresult"}
+#     root = ET.fromstring(xml_str)
+#     rows = root.findall("fm:ROW", ns)
+#     if not rows:
+#         raise Exception("No se encontraron ROW en XML FileMaker")
+    
+#     def get(row, tag):
+#         # Primero intenta campo simple (sin DATA)
+#         el = row.find(f"fm:{tag}", ns)
+#         if el is not None and el.text:
+#             return el.text.strip()
+#         # Si no, busca con DATA (campos repetidos)
+#         el = row.find(f"fm:{tag}/fm:DATA", ns)
+#         return el.text.strip() if el is not None and el.text else ""
+    
+#     def to_decimal(value: str) -> Decimal:
+#         clean = value.replace(",", "").strip()
+#         return Decimal(clean or "0")
+    
+#     # def getSinData(row, tag):
+#     #     el = row.find(f"fm:{tag}", ns)
+#     #     return el.text.strip() if el is not None and el.text else ""
+    
+#     # Tomamos datos generales del primer ROW (comunes a todos los conceptos)
+#     first = rows[0]
+    
+#     # Procesar todos los conceptos (uno por cada ROW)
+#     conceptos = []
+#     for row in rows:
+#         concepto = {
+#             "clave_prod_serv": get(row, "ClaveProdServ"),
+#             "cantidad": to_decimal(get(row, "cantidad")),
+#             "clave_unidad": get(row, "Clave_unidad"),
+#             "unidad": get(row, "unidad"),
+#             "descripcion": get(row, "ConceptoItem"),
+#             "valor_unitario": to_decimal(get(row, "Monto")),
+#             "importe": to_decimal(get(row, "Importe")),
+#             "descuento": to_decimal(get(row, "DescuentoItem")),
+#             "tasa_iva": to_decimal(get(row, "tasa_IVA_porcentaje")),
+#             "monto_item_iva": to_decimal(get(row, "monto_item_IVA"))
+#         }
+#         conceptos.append(concepto)
+    
+#     factura = {
+#         "emisor": {
+#             "rfc": get(first, "Emisor_RFC"),
+#             "nombre": get(first, "Emisor_Nombre"),
+#             "regimen": get(first, "Emisor_c_RegimenFiscal"),
+#             "cp": get(first, "Emisor_codigo_postal")
+#         },
+#         "receptor": {
+#             "rfc": get(first, "Receptor_RFC"),
+#             "nombre": get(first, "Receptor_Nombre_Cliente_opc"),
+#             "regimen": get(first, "Receptor_regimen"),
+#             "uso_cfdi": get(first, "Receptor_UsoCFDI"),
+#             "cp": get(first, "Receptor_CP_opc")
+#         },
+#         "conceptos": conceptos,  # Lista de conceptos
+#         "serie": get(first, "serie"),
+#         "folio": get(first, "folio"),
+#         "metodo_pago": get(first, "Metodo_de_pago"),
+#         "forma_pago": get(first, "Forma_de_pago"),
+#         "subtotal": to_decimal(get(first, "Subtotal")),
+#         "iva": to_decimal(get(first, "Iva")),
+#         "total": to_decimal(get(first, "Total")),
+#     }
+#     return factura
+
 def parse_filemaker_xml(xml_str: str) -> dict:
     ns = {"fm": "http://www.filemaker.com/fmpdsoresult"}
     root = ET.fromstring(xml_str)
     rows = root.findall("fm:ROW", ns)
     if not rows:
         raise Exception("No se encontraron ROW en XML FileMaker")
-    
-    def get(row, tag):
-        el = row.find(f"fm:{tag}/fm:DATA", ns)
-        return el.text.strip() if el is not None and el.text else ""
-    
-    def getSinData(row, tag):
+
+    def get_text(row, tag):
+        """Campo simple: con o sin DATA"""
         el = row.find(f"fm:{tag}", ns)
-        return el.text.strip() if el is not None and el.text else ""
-    
-    # Tomamos datos generales del primer ROW (comunes a todos los conceptos)
+        if el is None:
+            return ""
+        data = el.find("fm:DATA", ns)
+        if data is not None:
+            return data.text.strip() if data.text else ""
+        return el.text.strip() if el.text else ""
+
+    def get_all_data(row, tag):
+        """Todos los DATA de un campo (conceptos múltiples)"""
+        el = row.find(f"fm:{tag}", ns)
+        if el is None:
+            return []
+        return [d.text.strip() if d.text else "" for d in el.findall("fm:DATA", ns)]
+
+    def to_decimal(value: str) -> Decimal:
+        return Decimal(value.replace(",", "").strip() or "0")
+
     first = rows[0]
-    
-    # Procesar todos los conceptos (uno por cada ROW)
+
+    # Extraer listas de conceptos
+    claves        = get_all_data(first, "ClaveProdServ")
+    cantidades    = get_all_data(first, "cantidad")
+    claves_unidad = get_all_data(first, "Clave_unidad")
+    unidades      = get_all_data(first, "unidad")
+    descripciones = get_all_data(first, "ConceptoItem")
+    montos        = get_all_data(first, "Monto")
+    importes      = get_all_data(first, "Importe")
+    descuentos    = get_all_data(first, "DescuentoItem")
+    tasas_iva     = get_all_data(first, "tasa_IVA_porcentaje")
+    montos_iva    = get_all_data(first, "monto_item_IVA")
+
     conceptos = []
-    for row in rows:
-        concepto = {
-            "clave_prod_serv": getSinData(row, "ClaveProdServ"),
-            "cantidad": Decimal(getSinData(row, "cantidad") or "0"),
-            "clave_unidad": getSinData(row, "Clave_unidad"),
-            "unidad": getSinData(row, "unidad"),
-            "descripcion": getSinData(row, "ConceptoItem"),
-            "valor_unitario": Decimal(getSinData(row, "Monto") or "0"),
-            "importe": Decimal(getSinData(row, "Importe") or "0"),
-            "descuento": Decimal(getSinData(row, "DescuentoItem") or "0"),
-            "tasa_iva": Decimal(getSinData(row, "tasa_IVA_porcentaje") or "0"),
-            "monto_item_iva": Decimal(getSinData(row, "monto_item_IVA") or "0")
-        }
-        conceptos.append(concepto)
-    
+    for i in range(len(claves)):
+        conceptos.append({
+            "clave_prod_serv": claves[i],
+            "cantidad":        to_decimal(cantidades[i]),
+            "clave_unidad":    claves_unidad[i],
+            "unidad":          unidades[i],
+            "descripcion":     descripciones[i],
+            "valor_unitario":  to_decimal(montos[i]),
+            "importe":         to_decimal(importes[i]),
+            "descuento":       to_decimal(descuentos[i]),
+            "tasa_iva":        to_decimal(tasas_iva[i]),
+            "monto_item_iva":  to_decimal(montos_iva[i]),
+        })
+
     factura = {
         "emisor": {
-            "rfc": get(first, "Emisor_RFC"),
-            "nombre": get(first, "Emisor_Nombre"),
-            "regimen": get(first, "Emisor_c_RegimenFiscal"),
-            "cp": get(first, "Emisor_codigo_postal")
+            "rfc":     get_text(first, "Emisor_RFC"),
+            "nombre":  get_text(first, "Emisor_Nombre"),
+            "regimen": get_text(first, "Emisor_c_RegimenFiscal"),
+            "cp":      get_text(first, "Emisor_codigo_postal"),
         },
         "receptor": {
-            "rfc": get(first, "Receptor_RFC"),
-            "nombre": get(first, "Receptor_Nombre_Cliente_opc"),
-            "regimen": get(first, "Receptor_regimen"),
-            "uso_cfdi": get(first, "Receptor_UsoCFDI"),
-            "cp": get(first, "Receptor_CP_opc")
+            "rfc":      get_text(first, "Receptor_RFC"),
+            "nombre":   get_text(first, "Receptor_Nombre_Cliente_opc"),
+            "regimen":  get_text(first, "Receptor_regimen"),
+            "uso_cfdi": get_text(first, "Receptor_UsoCFDI"),
+            "cp":       get_text(first, "Receptor_CP_opc"),
         },
-        "conceptos": conceptos,  # Lista de conceptos
-        "serie": get(first, "serie"),
-        "folio": get(first, "folio"),
-        "metodo_pago": get(first, "Metodo_de_pago"),
-        "forma_pago": get(first, "Forma_de_pago"),
-        "subtotal": Decimal(get(first, "Subtotal") or "0"),
-        "iva": Decimal(get(first, "Iva") or "0"),
-        "total": Decimal(get(first, "Total") or "0"),
+        "conceptos":   conceptos,
+        "serie":       get_text(first, "serie"),
+        "folio":       get_text(first, "folio"),
+        "metodo_pago": get_text(first, "Metodo_de_pago"),
+        "forma_pago":  get_text(first, "Forma_de_pago"),
+        "subtotal":    to_decimal(get_text(first, "Subtotal")),
+        "iva":         to_decimal(get_text(first, "Iva")),  
+        "total":       to_decimal(get_text(first, "Total")),
     }
     return factura
 
@@ -1040,21 +1130,6 @@ def timbrar_complemento_pago_params():
         folio = factura["Comprobante"]["Folio"]
         nombre_archivo = f"{serie}_{folio}"
 
-        # #obtener escritorio dinamicamente
-        # escritorio = obtener_escritorio()
-
-        # carpeta_base = os.path.join(escritorio, "fm", "cfdi", "timbrados", nombre_carpeta)
-        # os.makedirs(carpeta_base, exist_ok=True)
-
-        # ruta_xml_timbrado = os.path.join(carpeta_base, f"CFDI_{nombre_carpeta}.xml")
-        # ruta_pdf = os.path.join(carpeta_base, f"CFDI_{nombre_carpeta}.pdf")
-
-        # with open(ruta_xml_timbrado, 'wb') as f:
-        #     f.write(xml_timbrado_bytes)
-
-        # with open(ruta_pdf, 'wb') as f:
-        #     f.write(pdf_bytes)
-
         return jsonify({
             "success": True,
             "mensaje": "Complemento de pago timbrado correctamente",
@@ -1248,35 +1323,160 @@ def parse_xml_complemento_params(xml_cfdi: str, forma_pago: str, fecha_pago: str
         }
     }
 
-@app.route("/timbrar-aplicacion-anticipo-ruta", methods=["GET"])
+# @app.route("/timbrar-aplicacion-anticipo-ruta", methods=["GET"])
+# def timbrar_aplicacion_anticipo_ruta():
+#     try:
+#         ruta_xml_anticipo = request.args.get("ruta_xml_anticipo")
+#         ruta_xml_filemaker = request.args.get("ruta_xml_filemaker")
+
+#         if not ruta_xml_anticipo:
+#             return jsonify({"success": False, "error": "Falta el parámetro: ruta_xml_anticipo"}), 400
+
+#         if not ruta_xml_filemaker:
+#             return jsonify({"success": False, "error": "Falta el parámetro: ruta_xml_filemaker"}), 400
+
+#         if not os.path.exists(ruta_xml_anticipo):
+#             return jsonify({"success": False, "error": f"Archivo CFDI origen no encontrado: {ruta_xml_anticipo}"}), 404
+
+#         if not os.path.exists(ruta_xml_filemaker):
+#             return jsonify({"success": False, "error": f"Archivo FileMaker no encontrado: {ruta_xml_filemaker}"}), 404
+
+#         with open(ruta_xml_anticipo, 'r', encoding='utf-8') as file:
+#             xml_cfdi_string = file.read()
+
+#         with open(ruta_xml_filemaker, 'r', encoding='utf-8') as file:
+#             xml_filemaker_string = file.read()
+
+#         uuid_origen = extraer_uuid_cfdi(xml_cfdi_string)
+#         if not uuid_origen:
+#             return jsonify({"success": False, "error": "No se encontró UUID en CFDI origen"}), 422
+
+#         factura = parse_filemaker_xml(xml_filemaker_string)
+
+#         contexto = {
+#             "uuid_origen": uuid_origen,
+#             "factura": factura
+#         }
+
+#         contexto_result = crear_cfdi_desde_contexto(
+#             contexto=contexto,
+#             certificado_path=RUTA_CER,
+#             key_path=RUTA_KEY,
+#             password=PASSWORD_KEY,
+#             xslt_path=RUTA_XSLT
+#         )
+
+#         xml_bytes = contexto_result["xml_sellado"].encode("utf-8")
+#         guardar_xml(xml_bytes, tipo_comprobante="anticipo")
+
+#         resultado_pac = timbrar_con_pac(xml_bytes)
+#         error_pac = resultado_pac["error"]
+#         xml_timbrado_tuple = resultado_pac["cfdi"]
+#         cadena_original = resultado_pac["cadena_original"]
+#         status_pac = resultado_pac["status_pac"]
+#         mensaje_pac = resultado_pac["mensaje_pac"]
+
+#         if error_pac:
+#             return jsonify({"success": False, "error": f"Error del PAC: {error_pac}"}), 422
+
+#         xml_timbrado_result = generar_xml_timbrado(xml_timbrado_tuple)
+
+#         if not xml_timbrado_result.get("success", True) and "error" in xml_timbrado_result:
+#             return jsonify({"success": False, "error": xml_timbrado_result["error"]}), 422
+
+#         xml_timbrado_bytes = xml_timbrado_result["xml"].encode('utf-8')
+
+#         # Extraer datos del TFD
+#         import xml.etree.ElementTree as ET
+#         tfd_ns = {"tfd": "http://www.sat.gob.mx/TimbreFiscalDigital"}
+#         root_timbrado = ET.fromstring(xml_timbrado_bytes)
+#         tfd = root_timbrado.find(".//tfd:TimbreFiscalDigital", tfd_ns)
+
+#         uuid            = tfd.get("UUID", "")
+#         fecha_timbrado  = tfd.get("FechaTimbrado", "")
+#         sello_cfdi      = tfd.get("SelloCFD", "")
+#         sello_sat       = tfd.get("SelloSAT", "")
+#         no_cert_sat     = tfd.get("NoCertificadoSAT", "")
+#         rfc_prov_certif = tfd.get("RfcProvCertif", "")
+#         no_cert_emisor  = root_timbrado.get("NoCertificado", "")
+
+#         # Generar PDF
+#         with open(ruta_xml_filemaker, 'rb') as file:
+#             xml_filemaker_bytes = file.read()
+
+#         pdf_bytes = generar_pdf_factura(
+#             xml_timbrado=xml_timbrado_bytes,
+#             tipo_comprobante="I",
+#             xml_anticipo=xml_filemaker_bytes,
+#             cad_original_pac= cadena_original
+#         )
+
+#         guardar_pdf(pdf_bytes, tipo_comprobante="anticipo")
+
+#         # Crear carpeta por factura
+#         serie = factura["serie"]
+#         folio = factura["folio"]
+#         nombre_carpeta = f"{serie}_{folio}"
+
+#         #obtener escritorio dinamicamente
+#         escritorio = obtener_escritorio()
+
+#         carpeta_base = os.path.join(escritorio, "fm", "cfdi", "timbrados", nombre_carpeta)
+#         os.makedirs(carpeta_base, exist_ok=True)
+
+#         ruta_xml_timbrado = os.path.join(carpeta_base, f"CFDI_{nombre_carpeta}.xml")
+#         ruta_pdf = os.path.join(carpeta_base, f"CFDI_{nombre_carpeta}.pdf")
+
+#         with open(ruta_xml_timbrado, 'wb') as f:
+#             f.write(xml_timbrado_bytes)
+
+#         with open(ruta_pdf, 'wb') as f:
+#             f.write(pdf_bytes)
+
+#         return jsonify({
+#             "success": True,
+#             "mensaje_pac": mensaje_pac,
+#             "status_pac": status_pac,
+#             "uuid": uuid,
+#             "fecha_timbrado": fecha_timbrado,
+#             "sello_cfdi": sello_cfdi,
+#             "sello_sat": sello_sat,
+#             "no_certificado_sat": no_cert_sat,
+#             "rfc_prov_certif": rfc_prov_certif,
+#             "no_certificado_emisor": no_cert_emisor,
+#             "cadena_original": cadena_original,
+#             "ruta_xml": ruta_xml_timbrado,
+#             "ruta_pdf": ruta_pdf,
+#             "cadena_original": contexto_result["cad_original_cfdi"]
+#         }), 200
+
+#     except Exception as e:
+#         import traceback
+#         return jsonify({
+#             "success": False,
+#             "error": str(e),
+#             "traceback": traceback.format_exc()
+#         }), 500
+
+@app.route("/timbrar-aplicacion-anticipo-ruta", methods=["POST"])
 def timbrar_aplicacion_anticipo_ruta():
     try:
-        ruta_xml_anticipo = request.args.get("ruta_xml_anticipo")
-        ruta_xml_filemaker = request.args.get("ruta_xml_filemaker")
+        # Recibir archivo XML de FileMaker
+        file_base64 = request.form.get("file_filemaker_base64")
+        uuid_origen = request.form.get("uuid_origen")
 
-        if not ruta_xml_anticipo:
-            return jsonify({"success": False, "error": "Falta el parámetro: ruta_xml_anticipo"}), 400
+        if not file_base64:
+            return jsonify({"success": False, "error": "Falta el archivo XML de FileMaker"}), 400
 
-        if not ruta_xml_filemaker:
-            return jsonify({"success": False, "error": "Falta el parámetro: ruta_xml_filemaker"}), 400
-
-        if not os.path.exists(ruta_xml_anticipo):
-            return jsonify({"success": False, "error": f"Archivo CFDI origen no encontrado: {ruta_xml_anticipo}"}), 404
-
-        if not os.path.exists(ruta_xml_filemaker):
-            return jsonify({"success": False, "error": f"Archivo FileMaker no encontrado: {ruta_xml_filemaker}"}), 404
-
-        with open(ruta_xml_anticipo, 'r', encoding='utf-8') as file:
-            xml_cfdi_string = file.read()
-
-        with open(ruta_xml_filemaker, 'r', encoding='utf-8') as file:
-            xml_filemaker_string = file.read()
-
-        uuid_origen = extraer_uuid_cfdi(xml_cfdi_string)
         if not uuid_origen:
-            return jsonify({"success": False, "error": "No se encontró UUID en CFDI origen"}), 422
+            return jsonify({"success": False, "error": "Falta el parámetro: uuid_origen"}), 400
+
+        # Leer contenido del archivo
+        xml_filemaker_string = base64.b64decode(file_base64).decode('utf-8')
 
         factura = parse_filemaker_xml(xml_filemaker_string)
+
+        print(xml_filemaker_string)
 
         contexto = {
             "uuid_origen": uuid_origen,
@@ -1298,7 +1498,8 @@ def timbrar_aplicacion_anticipo_ruta():
         error_pac = resultado_pac["error"]
         xml_timbrado_tuple = resultado_pac["cfdi"]
         cadena_original = resultado_pac["cadena_original"]
-        status_pac = resultado_pac["status_pac"]
+        # status_pac = resultado_pac["status_pac"]
+        status_pac = resultado_pac.get("status_pac", "")
         mensaje_pac = resultado_pac["mensaje_pac"]
 
         if error_pac:
@@ -1312,7 +1513,6 @@ def timbrar_aplicacion_anticipo_ruta():
         xml_timbrado_bytes = xml_timbrado_result["xml"].encode('utf-8')
 
         # Extraer datos del TFD
-        import xml.etree.ElementTree as ET
         tfd_ns = {"tfd": "http://www.sat.gob.mx/TimbreFiscalDigital"}
         root_timbrado = ET.fromstring(xml_timbrado_bytes)
         tfd = root_timbrado.find(".//tfd:TimbreFiscalDigital", tfd_ns)
@@ -1326,37 +1526,19 @@ def timbrar_aplicacion_anticipo_ruta():
         no_cert_emisor  = root_timbrado.get("NoCertificado", "")
 
         # Generar PDF
-        with open(ruta_xml_filemaker, 'rb') as file:
-            xml_filemaker_bytes = file.read()
-
         pdf_bytes = generar_pdf_factura(
             xml_timbrado=xml_timbrado_bytes,
             tipo_comprobante="I",
-            xml_anticipo=xml_filemaker_bytes,
-            cad_original_pac= cadena_original
+            xml_anticipo=xml_filemaker_string.encode('utf-8'),
+            cad_original_pac=cadena_original
         )
 
         guardar_pdf(pdf_bytes, tipo_comprobante="anticipo")
 
-        # Crear carpeta por factura
+        # Nombre de carpeta basado en serie y folio
         serie = factura["serie"]
         folio = factura["folio"]
-        nombre_carpeta = f"{serie}_{folio}"
-
-        #obtener escritorio dinamicamente
-        escritorio = obtener_escritorio()
-
-        carpeta_base = os.path.join(escritorio, "fm", "cfdi", "timbrados", nombre_carpeta)
-        os.makedirs(carpeta_base, exist_ok=True)
-
-        ruta_xml_timbrado = os.path.join(carpeta_base, f"CFDI_{nombre_carpeta}.xml")
-        ruta_pdf = os.path.join(carpeta_base, f"CFDI_{nombre_carpeta}.pdf")
-
-        with open(ruta_xml_timbrado, 'wb') as f:
-            f.write(xml_timbrado_bytes)
-
-        with open(ruta_pdf, 'wb') as f:
-            f.write(pdf_bytes)
+        nombre_archivo = f"{serie}_{folio}"
 
         return jsonify({
             "success": True,
@@ -1369,19 +1551,21 @@ def timbrar_aplicacion_anticipo_ruta():
             "no_certificado_sat": no_cert_sat,
             "rfc_prov_certif": rfc_prov_certif,
             "no_certificado_emisor": no_cert_emisor,
-            "cadena_original": cadena_original,
-            "ruta_xml": ruta_xml_timbrado,
-            "ruta_pdf": ruta_pdf,
-            "cadena_original": contexto_result["cad_original_cfdi"]
+            "cadena_original": contexto_result["cad_original_cfdi"],
+            "xml_timbrado_base64": base64.b64encode(xml_timbrado_bytes).decode('utf-8'),
+            "pdf_base64": base64.b64encode(pdf_bytes).decode('utf-8'),
+            "nombre_xml": f"CFDI_{nombre_archivo}.xml",
+            "nombre_pdf": f"CFDI_{nombre_archivo}.pdf"
         }), 200
 
     except Exception as e:
         import traceback
         return jsonify({
             "success": False,
+            # "mensaje_pac": mensaje_pac.resultados[0].mensaje,
             "error": str(e),
             "traceback": traceback.format_exc()
-        }), 500
+        }), 500 
 
 def obtener_escritorio():
     CSIDL_DESKTOPDIRECTORY = 0x10
@@ -1524,6 +1708,31 @@ def timbrar_ingreso_ruta():
             "error": str(e),
             "traceback": traceback.format_exc()
         }), 500
+
+@app.route("/timbrar", methods=["POST"])
+def timbrar():
+    xml_bytes = request.get_data()
+ 
+    if not xml_bytes:
+        return jsonify({"error": "No se recibió ningún XML en el body"}), 400
+ 
+    print(f"\n[POST /timbrar] XML recibido ({len(xml_bytes)} bytes)")
+ 
+    resultado = timbrar_con_pac(xml_bytes)
+ 
+    if resultado.get("error"):
+        return jsonify({
+            "ok"   : False,
+            "error": resultado["error"]
+        }), 422
+ 
+    return jsonify({
+        "ok"             : True,
+        "status_pac"     : resultado["status_pac"],
+        "mensaje_pac"    : resultado["mensaje_pac"],
+        "cfdi"           : resultado["cfdi"],
+        "cadena_original": resultado["cadena_original"]
+    }), 200
 
 if __name__ == "__main__":
     app.run(host='0.0.0.0', port=5001, debug=True, ssl_context=context)

@@ -389,84 +389,154 @@ def extraer_datos_anticipo(xml_productos: bytes, xml_aplicacion: bytes) -> CFDID
     except Exception as e:
         raise PDFGenerationError(f"Error extrayendo datos de anticipo: {str(e)}")
 
+# def extraer_conceptos_filemaker(xml_filemaker: bytes) -> List[ConceptoCFDI]:
+#     """
+#     Extrae conceptos con codificación UTF-8 correcta
+#     """
+#     conceptos = []
+    
+#     try:
+#         #  IMPORTANTE: Parsear el XML especificando la codificación
+#         tree = etree.fromstring(xml_filemaker)
+        
+#         fm_ns = "http://www.filemaker.com/fmpdsoresult"
+#         rows = tree.findall(f".//{{{fm_ns}}}ROW")
+#         if not rows:
+#             rows = tree.findall(".//ROW")
+        
+#         total_rows = len(rows)
+#         print(f"✓ Encontrados {total_rows} ROW en FileMaker")
+        
+#         for i, row in enumerate(rows, 1):
+#             try:
+#                 concepto_data = {}
+#                 campos_concepto = ["ClaveProdServ", "cantidad", "Clave_unidad", 
+#                                   "ConceptoItem", "Monto", "Importe", "DescuentoItem"]
+                
+#                 for child in row:
+#                     tag_name = child.tag.split('}')[-1] if '}' in child.tag else child.tag
+                    
+#                     if tag_name in campos_concepto:
+#                         valor = None
+                        
+#                         # Buscar valor en DATA o texto directo
+#                         data_node = child.find(f"{{{fm_ns}}}DATA")
+#                         if data_node is not None and data_node.text:
+#                             valor = data_node.text
+#                         elif child.text:
+#                             valor = child.text
+                        
+#                         if valor:
+#                             #  CLAVE: Normalizar el texto
+#                             valor = valor.strip()
+                            
+#                             # Para descripciones, asegurar UTF-8 correcto
+#                             if tag_name == "ConceptoItem":
+#                                 # Método 1: Si hay entidades HTML, decodificarlas
+#                                 valor = html.unescape(valor)
+                            
+#                             concepto_data[tag_name] = valor
+                
+#                 if "ConceptoItem" not in concepto_data or "Importe" not in concepto_data:
+#                     continue
+                
+#                 cantidad = Decimal(concepto_data.get("cantidad", "1").replace(",", ""))
+#                 monto = Decimal(concepto_data.get("Monto", "0").replace(",", ""))
+#                 importe = Decimal(concepto_data.get("Importe", "0").replace(",", ""))
+#                 descuento = Decimal(concepto_data.get("DescuentoItem", "0").replace(",", ""))
+                
+#                 concepto = ConceptoCFDI(
+#                     clave_prod_serv=concepto_data.get("ClaveProdServ", "01010101"),
+#                     cantidad=cantidad,
+#                     unidad=concepto_data.get("Clave_unidad", "E48"),
+#                     descripcion=concepto_data["ConceptoItem"],
+#                     valor_unitario=monto,
+#                     importe=importe,
+#                     descuento=descuento
+#                 )
+                
+#                 conceptos.append(concepto)
+#                 print(f"  ✓ ROW {i}: {concepto.descripcion[:50]}...")
+                
+#             except Exception as e:
+#                 print(f"  ⚠ Error en ROW {i}: {e}")
+#                 continue
+        
+#         print(f"✓ Total conceptos extraídos: {len(conceptos)}")
+#         return conceptos
+        
+#     except Exception as e:
+#         print(f"❌ ERROR: {e}")
+#         import traceback
+#         traceback.print_exc()
+#         return []
+
 def extraer_conceptos_filemaker(xml_filemaker: bytes) -> List[ConceptoCFDI]:
-    """
-    Extrae conceptos con codificación UTF-8 correcta
-    """
     conceptos = []
     
     try:
-        #  IMPORTANTE: Parsear el XML especificando la codificación
         tree = etree.fromstring(xml_filemaker)
-        
         fm_ns = "http://www.filemaker.com/fmpdsoresult"
         rows = tree.findall(f".//{{{fm_ns}}}ROW")
         if not rows:
             rows = tree.findall(".//ROW")
         
-        total_rows = len(rows)
-        print(f"✓ Encontrados {total_rows} ROW en FileMaker")
+        # print(f"✓ Encontrados {len(rows)} ROW en FileMaker")
         
-        for i, row in enumerate(rows, 1):
+        first = rows[0]
+
+        def get_all_data(row, tag):
+            """Obtiene todos los DATA de un campo"""
+            el = row.find(f"{{{fm_ns}}}{tag}")
+            if el is None:
+                return []
+            data_nodes = el.findall(f"{{{fm_ns}}}DATA")
+            if data_nodes:
+                return [d.text.strip() if d.text else "" for d in data_nodes]
+            # Sin DATA: texto directo
+            return [el.text.strip() if el.text else ""]
+
+        # Extraer listas por campo
+        claves        = get_all_data(first, "ClaveProdServ")
+        cantidades    = get_all_data(first, "cantidad")
+        claves_unidad = get_all_data(first, "Clave_unidad")
+        descripciones = get_all_data(first, "ConceptoItem")
+        montos        = get_all_data(first, "Monto")
+        importes      = get_all_data(first, "Importe")
+        descuentos    = get_all_data(first, "DescuentoItem")
+
+        # print(f"✓ Conceptos detectados: {len(claves)}")
+
+        for i in range(len(claves)):
             try:
-                concepto_data = {}
-                campos_concepto = ["ClaveProdServ", "cantidad", "Clave_unidad", 
-                                  "ConceptoItem", "Monto", "Importe", "DescuentoItem"]
-                
-                for child in row:
-                    tag_name = child.tag.split('}')[-1] if '}' in child.tag else child.tag
-                    
-                    if tag_name in campos_concepto:
-                        valor = None
-                        
-                        # Buscar valor en DATA o texto directo
-                        data_node = child.find(f"{{{fm_ns}}}DATA")
-                        if data_node is not None and data_node.text:
-                            valor = data_node.text
-                        elif child.text:
-                            valor = child.text
-                        
-                        if valor:
-                            #  CLAVE: Normalizar el texto
-                            valor = valor.strip()
-                            
-                            # Para descripciones, asegurar UTF-8 correcto
-                            if tag_name == "ConceptoItem":
-                                # Método 1: Si hay entidades HTML, decodificarlas
-                                valor = html.unescape(valor)
-                            
-                            concepto_data[tag_name] = valor
-                
-                if "ConceptoItem" not in concepto_data or "Importe" not in concepto_data:
-                    continue
-                
-                cantidad = Decimal(concepto_data.get("cantidad", "1").replace(",", ""))
-                monto = Decimal(concepto_data.get("Monto", "0").replace(",", ""))
-                importe = Decimal(concepto_data.get("Importe", "0").replace(",", ""))
-                descuento = Decimal(concepto_data.get("DescuentoItem", "0").replace(",", ""))
-                
+                descripcion = html.unescape(descripciones[i]) if i < len(descripciones) else ""
+                cantidad    = Decimal((cantidades[i] if i < len(cantidades) else "1").replace(",", ""))
+                monto       = Decimal((montos[i] if i < len(montos) else "0").replace(",", ""))
+                importe     = Decimal((importes[i] if i < len(importes) else "0").replace(",", ""))
+                descuento   = Decimal((descuentos[i] if i < len(descuentos) else "0").replace(",", ""))
+
                 concepto = ConceptoCFDI(
-                    clave_prod_serv=concepto_data.get("ClaveProdServ", "01010101"),
+                    clave_prod_serv=claves[i] if i < len(claves) else "01010101",
                     cantidad=cantidad,
-                    unidad=concepto_data.get("Clave_unidad", "E48"),
-                    descripcion=concepto_data["ConceptoItem"],
+                    unidad=claves_unidad[i] if i < len(claves_unidad) else "E48",
+                    descripcion=descripcion,
                     valor_unitario=monto,
                     importe=importe,
                     descuento=descuento
                 )
-                
+
                 conceptos.append(concepto)
-                print(f"  ✓ ROW {i}: {concepto.descripcion[:50]}...")
-                
+                # print(f"  ✓ Concepto {i+1}: {descripcion[:50]}...")
+
             except Exception as e:
-                print(f"  ⚠ Error en ROW {i}: {e}")
+                print(f"Error en concepto {i+1}: {e}")
                 continue
-        
-        print(f"✓ Total conceptos extraídos: {len(conceptos)}")
+
+        # print(f"Total conceptos extraídos: {len(conceptos)}")
         return conceptos
-        
+
     except Exception as e:
-        print(f"❌ ERROR: {e}")
+        # print(f"ERROR: {e}")
         import traceback
         traceback.print_exc()
         return []
