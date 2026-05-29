@@ -24,6 +24,7 @@ import ssl
 import re
 import io
 import zipfile
+import pytz
 
 '''
 para produccion cambiar en este archivo la ruta del certificado, key y el password de la key
@@ -512,88 +513,68 @@ def crear_cfdi_complemento(complemento_dict: dict, no_certificado, certificado_b
 @app.route("/timbrar-aplicacion-anticipo", methods=["POST"])
 def timbrar_aplicacion_anticipo():
     try:
-        #  Recibir archivos
-        xml_anticipo = request.files.get("xml_archivo1")     # CFDI origen timbrado
-        xml_filemaker = request.files.get("xml_archivo2")    # XML FileMaker
+        xml_anticipo  = request.files.get("xml_archivo1")
+        xml_filemaker = request.files.get("xml_archivo2")
 
         if not xml_anticipo:
             return jsonify({"success": False, "error": "Falta el archivo CFDI origen"}), 400
         if not xml_filemaker:
             return jsonify({"success": False, "error": "Falta el archivo FileMaker"}), 400
 
-        #  Leer XMLs
-        xml_cfdi_string = xml_anticipo.read().decode("utf-8")
+        # Leer una sola vez y guardar en variables
+        xml_cfdi_string      = xml_anticipo.read().decode("utf-8")
         xml_filemaker_string = xml_filemaker.read().decode("utf-8")
 
-        #  Extraer UUID del CFDI origen
         uuid_origen = extraer_uuid_cfdi(xml_cfdi_string)
         if not uuid_origen:
             return jsonify({"success": False, "error": "No se encontró UUID en CFDI origen"}), 422
-        
-        #parsear XML FileMaker
+
         factura = parse_filemaker_xml(xml_filemaker_string)
-        # print(factura)
 
         contexto = {
             "uuid_origen": uuid_origen,
             "factura": factura
         }
 
-        #  Crear CFDI 4.0
-        xml_cfdi = crear_cfdi_desde_contexto(
+        contexto_result = crear_cfdi_desde_contexto(
             contexto=contexto,
             certificado_path=RUTA_CER,
             key_path=RUTA_KEY,
             password=PASSWORD_KEY,
             xslt_path=RUTA_XSLT
         )
-        # print(xml_cfdi)
 
-        #transformar xml en stringa bytes
-        xml_bytes = xml_cfdi.encode("utf-8")
+        xml_bytes = contexto_result["xml_sellado"].encode("utf-8")
         guardar_xml(xml_bytes, tipo_comprobante="anticipo")
 
-        #timbrar con pac, bytes solo  es cfdi
-        resultado_pac = timbrar_con_pac(xml_bytes)
+        resultado_pac  = timbrar_con_pac(xml_bytes)
         error_timbrado = resultado_pac["error"]
-        cfdi_bytes = resultado_pac["cfdi"]
+        cfdi_bytes     = resultado_pac["cfdi"]
         cadena_original = resultado_pac["cadena_original"]
 
         if error_timbrado:
-            return jsonify({
-                "success": False,
-                "error": error_timbrado
-            }), 422
+            return jsonify({"success": False, "error": error_timbrado}), 422
 
         respuesta = generar_xml_timbrado(cfdi_bytes)
 
-        # print(respuesta["xml"]) importante para generar xml
-        xml_base64 = base64.b64encode(respuesta["xml"].encode('utf-8')).decode('utf-8')
-
-        # if tipo == "aplicacion":
-        # Leer contenido como bytes
-        xml_anticipo_bytes = xml_anticipo.read()
-        xml_filemaker_bytes = xml_filemaker.read()
-        
-        xml_timbrado_str = respuesta["xml"]
-        xml_timbrado_bytes = xml_timbrado_str.encode('utf-8')   
+        xml_timbrado_bytes = respuesta["xml"].encode('utf-8')
+        xml_base64 = base64.b64encode(xml_timbrado_bytes).decode('utf-8')
 
         pdf_bytes = generar_pdf_factura(
             xml_timbrado=xml_timbrado_bytes,
             tipo_comprobante="I",
-            xml_anticipo=xml_filemaker_bytes,
-            cad_original_pac= cadena_original
+            xml_anticipo=xml_filemaker_string.encode('utf-8'),
+            cad_original_pac=cadena_original
         )
 
-        # Convertir PDF a base64
         guardar_pdf(pdf_bytes, tipo_comprobante="anticipo")
         pdf_base64 = base64.b64encode(pdf_bytes).decode('utf-8')
 
         return jsonify({
             "success": True,
-            "xml_timbrado": xml_base64,  #  está en base64 para la descarga
+            "xml_timbrado": xml_base64,
             "pdf": pdf_base64,
-            "pdf_filename": f"CFDI_Aplicacion_Anticipo.pdf"
+            "pdf_filename": "CFDI_Aplicacion_Anticipo.pdf"
         })
 
     except Exception as e:
@@ -760,26 +741,18 @@ def parse_filemaker_xml(xml_str: str) -> dict:
     return factura
 
 def crear_cfdi_desde_contexto(contexto: dict, certificado_path: str, key_path: str, password: str, xslt_path: str = None) -> dict:
-    uuid_origen = contexto.get("uuid_origen")
+    uuids_relacionados = contexto.get("uuids_relacionados", [])  # lista, puede ser vacía
     factura = contexto.get("factura")
-    
-    if not uuid_origen or not factura:
-        raise ValueError("Contexto debe contener 'uuid_origen' y 'factura'")
-    
-    # Cargar certificado y llave privada
+
+    if not factura:
+        raise ValueError("Contexto debe contener 'factura'")
+
     certificado_base64, no_certificado = cargar_certificado(certificado_path)
     llave_privada = cargar_llave_privada(key_path, password)
-    
-    # Crear el XML del CFDI
-    xml_sin_sellar = generar_xml_cfdi(factura, uuid_origen, no_certificado, certificado_base64)
-    # print(f"xml_sinSellar: {xml_sin_sellar}")
-    
-    # Sellar el CFDI
-    resultado_de_sellar = sellar_cfdi(xml_sin_sellar, llave_privada,certificado_base64, xslt_path)
-    # xml_sellado = resultado_sellar["xml_sellado"]
-    # cadena_original = resultado_sellar["cadena_original"]
-    
-    return resultado_de_sellar
+
+    xml_sin_sellar = generar_xml_cfdi(factura, uuids_relacionados, no_certificado, certificado_base64)
+
+    return sellar_cfdi(xml_sin_sellar, llave_privada, certificado_base64, xslt_path)
 
 
 @app.route("/timbrar-nomina", methods=["POST"])
@@ -793,6 +766,7 @@ def timbrar_nomina():
 
         #  Leer XMLs en string y bytes
         cfdi_nomina_string = xml_nomina.read().decode("utf-8")
+        cfdi_nomina_string = ajustar_fecha_cfdi(cfdi_nomina_string)
         # print(cfdi_nomina_string)
 
         llave_privada = cargar_llave_privada(RUTA_KEY, PASSWORD_KEY)
@@ -859,6 +833,19 @@ def crear_cfdi_nomina(xml_file, no_certificado, certificado_b64) -> str:
     xml_string = ET.tostring(root, encoding='unicode', method='xml')
     return xml_string
 
+def ajustar_fecha_cfdi(xml_str: str) -> str:
+    """
+    Reemplaza el atributo Fecha del nodo Comprobante
+    con la hora actual menos 1 hora, en formato ISO 8601.
+    """
+    tz_mx = pytz.timezone('America/Mexico_City')
+    nueva_fecha = (datetime.now(tz_mx) - timedelta(hours=1)).strftime('%Y-%m-%dT%H:%M:%S')
+
+    root = etree.fromstring(xml_str.encode('utf-8'))
+    root.set('Fecha', nueva_fecha)
+
+    return etree.tostring(root, pretty_print=True, xml_declaration=True, encoding='UTF-8').decode('utf-8')
+
 
 @app.route("/timbrar-ingreso", methods=["POST"])
 def timbrar_ingreso():
@@ -871,6 +858,7 @@ def timbrar_ingreso():
 
         #  Leer XMLs en string y bytes
         cfdi_nomina_string = xml_ingreso.read().decode("utf-8")
+        cfdi_nomina_string = ajustar_fecha_cfdi(cfdi_nomina_string)
         # print(cfdi_nomina_string)
 
         llave_privada = cargar_llave_privada(RUTA_KEY, PASSWORD_KEY)
@@ -1324,12 +1312,103 @@ def parse_xml_complemento_params(xml_cfdi: str, forma_pago: str, fecha_pago: str
     }
 
 
+def _procesar_timbrado_ingreso(file_base64: str, uuids_relacionados: list, tipo: str):
+    """Lógica compartida entre ambos endpoints. anticipo e ingreso """
+    xml_filemaker_string = base64.b64decode(file_base64).decode('utf-8')
+    factura = parse_filemaker_xml(xml_filemaker_string)
+
+    contexto = {
+        "uuids_relacionados": uuids_relacionados,
+        "factura": factura
+    }
+
+    contexto_result = crear_cfdi_desde_contexto(
+        contexto=contexto,
+        certificado_path=RUTA_CER,
+        key_path=RUTA_KEY,
+        password=PASSWORD_KEY,
+        xslt_path=RUTA_XSLT
+    )
+
+    xml_bytes = contexto_result["xml_sellado"].encode("utf-8")
+    guardar_xml(xml_bytes, tipo_comprobante="ingreso")
+
+    resultado_pac = timbrar_con_pac(xml_bytes)
+    error_pac = resultado_pac["error"]
+
+    if error_pac:
+        return None, f"Error del PAC: {error_pac}"
+
+    xml_timbrado_result = generar_xml_timbrado(resultado_pac["cfdi"])
+
+    if not xml_timbrado_result.get("success", True) and "error" in xml_timbrado_result:
+        return None, xml_timbrado_result["error"]
+
+    xml_timbrado_bytes = xml_timbrado_result["xml"].encode('utf-8')
+
+    tfd_ns = {"tfd": "http://www.sat.gob.mx/TimbreFiscalDigital"}
+    root_timbrado = ET.fromstring(xml_timbrado_bytes)
+    tfd = root_timbrado.find(".//tfd:TimbreFiscalDigital", tfd_ns)
+
+    pdf_bytes = generar_pdf_factura(
+        xml_timbrado=xml_timbrado_bytes,
+        tipo_comprobante="I",
+        xml_anticipo=xml_filemaker_string.encode('utf-8'),
+        cad_original_pac=resultado_pac["cadena_original"]
+    )
+
+    guardar_pdf(pdf_bytes, tipo_comprobante="ingreso")
+
+    serie  = factura["serie"]
+    folio  = factura["folio"]
+    nombre = f"{tipo}_{serie}_{folio}"
+
+    return {
+        "success": True,
+        "mensaje_pac":          resultado_pac["mensaje_pac"],
+        "status_pac":           resultado_pac.get("status_pac", ""),
+        "uuid":                 tfd.get("UUID", ""),
+        "fecha_timbrado":       tfd.get("FechaTimbrado", ""),
+        "sello_cfdi":           tfd.get("SelloCFD", ""),
+        "sello_sat":            tfd.get("SelloSAT", ""),
+        "no_certificado_sat":   tfd.get("NoCertificadoSAT", ""),
+        "rfc_prov_certif":      tfd.get("RfcProvCertif", ""),
+        "no_certificado_emisor": root_timbrado.get("NoCertificado", ""),
+        "cadena_original":      contexto_result["cad_original_cfdi"],
+        "xml_timbrado_base64":  base64.b64encode(xml_timbrado_bytes).decode('utf-8'),
+        "pdf_base64":           base64.b64encode(pdf_bytes).decode('utf-8'),
+        "nombre_xml":           f"CFDI_{nombre}.xml",
+        "nombre_pdf":           f"CFDI_{nombre}.pdf"
+    }, None
+
+
+@app.route("/timbrar-ingreso-ruta-FM", methods=["POST"])
+def timbrar_ingreso_ruta_FM():
+    try:
+        file_base64 = request.form.get("file_filemaker_base64")
+ 
+        if not file_base64:
+            return jsonify({"success": False, "error": "Falta el archivo XML de FileMaker"}), 400
+
+        # Sin UUIDs relacionados 
+        resultado, error = _procesar_timbrado_ingreso(file_base64, uuids_relacionados=[], tipo="I")
+
+        if error:
+            return jsonify({"success": False, "error": error}), 422
+
+        return jsonify(resultado), 200
+
+    except Exception as e:
+        import traceback
+        return jsonify({"success": False, "error": str(e), "traceback": traceback.format_exc()}), 500
+
+
 @app.route("/timbrar-aplicacion-anticipo-ruta", methods=["POST"])
 def timbrar_aplicacion_anticipo_ruta():
+    """Migrado — ahora usa la misma lógica que /timbrar-ingreso."""
     try:
-        # Recibir archivo XML de FileMaker
         file_base64 = request.form.get("file_filemaker_base64")
-        uuid_origen = request.form.get("uuid_origen")
+        uuid_origen = request.form.get("uuid_origen", "")
 
         if not file_base64:
             return jsonify({"success": False, "error": "Falta el archivo XML de FileMaker"}), 400
@@ -1337,101 +1416,21 @@ def timbrar_aplicacion_anticipo_ruta():
         if not uuid_origen:
             return jsonify({"success": False, "error": "Falta el parámetro: uuid_origen"}), 400
 
-        # Leer contenido del archivo
-        xml_filemaker_string = base64.b64decode(file_base64).decode('utf-8')
+        # uuid_origen sigue funcionando igual — se convierte a lista de uno
+        uuids_relacionados = [uuid_origen.strip()]
 
-        factura = parse_filemaker_xml(xml_filemaker_string)
+        resultado, error = _procesar_timbrado_ingreso(file_base64, uuids_relacionados, tipo="A")
 
-        print(xml_filemaker_string)
+        if error:
+            return jsonify({"success": False, "error": error}), 422
 
-        contexto = {
-            "uuid_origen": uuid_origen,
-            "factura": factura
-        }
-
-        contexto_result = crear_cfdi_desde_contexto(
-            contexto=contexto,
-            certificado_path=RUTA_CER,
-            key_path=RUTA_KEY,
-            password=PASSWORD_KEY,
-            xslt_path=RUTA_XSLT
-        )
-
-        xml_bytes = contexto_result["xml_sellado"].encode("utf-8")
-        guardar_xml(xml_bytes, tipo_comprobante="anticipo")
-
-        resultado_pac = timbrar_con_pac(xml_bytes)
-        error_pac = resultado_pac["error"]
-        xml_timbrado_tuple = resultado_pac["cfdi"]
-        cadena_original = resultado_pac["cadena_original"]
-        # status_pac = resultado_pac["status_pac"]
-        status_pac = resultado_pac.get("status_pac", "")
-        mensaje_pac = resultado_pac["mensaje_pac"]
-
-        if error_pac:
-            return jsonify({"success": False, "error": f"Error del PAC: {error_pac}"}), 422
-
-        xml_timbrado_result = generar_xml_timbrado(xml_timbrado_tuple)
-
-        if not xml_timbrado_result.get("success", True) and "error" in xml_timbrado_result:
-            return jsonify({"success": False, "error": xml_timbrado_result["error"]}), 422
-
-        xml_timbrado_bytes = xml_timbrado_result["xml"].encode('utf-8')
-
-        # Extraer datos del TFD
-        tfd_ns = {"tfd": "http://www.sat.gob.mx/TimbreFiscalDigital"}
-        root_timbrado = ET.fromstring(xml_timbrado_bytes)
-        tfd = root_timbrado.find(".//tfd:TimbreFiscalDigital", tfd_ns)
-
-        uuid            = tfd.get("UUID", "")
-        fecha_timbrado  = tfd.get("FechaTimbrado", "")
-        sello_cfdi      = tfd.get("SelloCFD", "")
-        sello_sat       = tfd.get("SelloSAT", "")
-        no_cert_sat     = tfd.get("NoCertificadoSAT", "")
-        rfc_prov_certif = tfd.get("RfcProvCertif", "")
-        no_cert_emisor  = root_timbrado.get("NoCertificado", "")
-
-        # Generar PDF
-        pdf_bytes = generar_pdf_factura(
-            xml_timbrado=xml_timbrado_bytes,
-            tipo_comprobante="I",
-            xml_anticipo=xml_filemaker_string.encode('utf-8'),
-            cad_original_pac=cadena_original
-        )
-
-        guardar_pdf(pdf_bytes, tipo_comprobante="anticipo")
-
-        # Nombre de carpeta basado en serie y folio
-        serie = factura["serie"]
-        folio = factura["folio"]
-        nombre_archivo = f"{serie}_{folio}"
-
-        return jsonify({
-            "success": True,
-            "mensaje_pac": mensaje_pac,
-            "status_pac": status_pac,
-            "uuid": uuid,
-            "fecha_timbrado": fecha_timbrado,
-            "sello_cfdi": sello_cfdi,
-            "sello_sat": sello_sat,
-            "no_certificado_sat": no_cert_sat,
-            "rfc_prov_certif": rfc_prov_certif,
-            "no_certificado_emisor": no_cert_emisor,
-            "cadena_original": contexto_result["cad_original_cfdi"],
-            "xml_timbrado_base64": base64.b64encode(xml_timbrado_bytes).decode('utf-8'),
-            "pdf_base64": base64.b64encode(pdf_bytes).decode('utf-8'),
-            "nombre_xml": f"CFDI_{nombre_archivo}.xml",
-            "nombre_pdf": f"CFDI_{nombre_archivo}.pdf"
-        }), 200
+        return jsonify(resultado), 200
 
     except Exception as e:
         import traceback
-        return jsonify({
-            "success": False,
-            # "mensaje_pac": mensaje_pac.resultados[0].mensaje,
-            "error": str(e),
-            "traceback": traceback.format_exc()
-        }), 500 
+        return jsonify({"success": False, "error": str(e), "traceback": traceback.format_exc()}), 500
+    
+
 
 def obtener_escritorio():
     CSIDL_DESKTOPDIRECTORY = 0x10

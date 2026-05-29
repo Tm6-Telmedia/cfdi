@@ -160,38 +160,27 @@ las funciones de abajo son propias del proceso timbrado pero a su vez son
 funciones exclusivas de aplicacion DE ANTICIPO
 """
 
-def generar_xml_cfdi(factura: dict, uuid_origen: str, no_certificado, certificado_base64: str) -> str:
-    """
-    Genera el XML del CFDI 4.0 sin el sello (para luego sellarlo)
-    """
-    # Namespaces CFDI 4.0
+def generar_xml_cfdi(factura: dict, uuids_relacionados: list, no_certificado, certificado_base64: str) -> str:
     nsmap = {
         'cfdi': 'http://www.sat.gob.mx/cfd/4',
         'xsi': 'http://www.w3.org/2001/XMLSchema-instance'
     }
-    
-    # Fecha y hora actual en formato ISO 8601 (Zona horaria de México)
+
     tz_mx = pytz.timezone('America/Mexico_City')
     fecha_cfdi = datetime.now(tz_mx).strftime('%Y-%m-%dT%H:%M:%S')
-    
-    # Crear elemento raíz Comprobante
-    comprobante = etree.Element(
-        '{http://www.sat.gob.mx/cfd/4}Comprobante',
-        nsmap=nsmap
-    )
-    
-    # Atributos del Comprobante
+
+    comprobante = etree.Element('{http://www.sat.gob.mx/cfd/4}Comprobante', nsmap=nsmap)
+
     comprobante.set('Version', '4.0')
     comprobante.set('Serie', factura.get('serie', ''))
     comprobante.set('Folio', factura.get('folio', ''))
     comprobante.set('Fecha', fecha_cfdi)
-    comprobante.set('Sello', '')  # Se llenará después del sellado
+    comprobante.set('Sello', '')
 
-    # FormaPago: Si MetodoPago es PPD, FormaPago debe ser "99" (Por Definir)
     metodo_pago = factura.get('metodo_pago', '')
     forma_pago = factura.get('forma_pago', '')
     if metodo_pago == 'PPD':
-        forma_pago = '99'  # Por Definir (obligatorio para PPD en CFDI 4.0)
+        forma_pago = '99'
 
     comprobante.set('FormaPago', forma_pago)
     comprobante.set('NoCertificado', no_certificado)
@@ -200,28 +189,28 @@ def generar_xml_cfdi(factura: dict, uuid_origen: str, no_certificado, certificad
     comprobante.set('Moneda', 'MXN')
     comprobante.set('TipoCambio', '1')
     comprobante.set('Total', f"{factura['total']:.2f}")
-    comprobante.set('TipoDeComprobante', 'I')  # Ingreso
-    comprobante.set('Exportacion', '01')  # No aplica
-    comprobante.set('MetodoPago', factura.get('metodo_pago', ''))
+    comprobante.set('TipoDeComprobante', 'I')
+    comprobante.set('Exportacion', '01')
+    comprobante.set('MetodoPago', metodo_pago)
     comprobante.set('LugarExpedicion', factura['emisor']['cp'])
-    
-    # Si hay descuento total
+
     if factura.get('descuento_total', Decimal('0')) > 0:
         comprobante.set('Descuento', f"{factura['descuento_total']:.2f}")
-    
-    # CfdiRelacionados - Relación con el anticipo original
-    cfdi_relacionados = etree.SubElement(comprobante, '{http://www.sat.gob.mx/cfd/4}CfdiRelacionados')
-    cfdi_relacionados.set('TipoRelacion', '07')  # Aplicación de anticipo
-    
-    cfdi_relacionado = etree.SubElement(cfdi_relacionados, '{http://www.sat.gob.mx/cfd/4}CfdiRelacionado')
-    cfdi_relacionado.set('UUID', uuid_origen)
-    
+
+    # CfdiRelacionados — solo si vienen UUIDs
+    if uuids_relacionados:
+        cfdi_relacionados = etree.SubElement(comprobante, '{http://www.sat.gob.mx/cfd/4}CfdiRelacionados')
+        cfdi_relacionados.set('TipoRelacion', '07')
+        for uuid in uuids_relacionados:
+            cfdi_relacionado = etree.SubElement(cfdi_relacionados, '{http://www.sat.gob.mx/cfd/4}CfdiRelacionado')
+            cfdi_relacionado.set('UUID', uuid)
+
     # Emisor
     emisor = etree.SubElement(comprobante, '{http://www.sat.gob.mx/cfd/4}Emisor')
     emisor.set('Rfc', factura['emisor']['rfc'])
     emisor.set('Nombre', factura['emisor']['nombre'])
     emisor.set('RegimenFiscal', factura['emisor']['regimen'])
-    
+
     # Receptor
     receptor = etree.SubElement(comprobante, '{http://www.sat.gob.mx/cfd/4}Receptor')
     receptor.set('Rfc', factura['receptor']['rfc'])
@@ -229,10 +218,10 @@ def generar_xml_cfdi(factura: dict, uuid_origen: str, no_certificado, certificad
     receptor.set('DomicilioFiscalReceptor', factura['receptor']['cp'])
     receptor.set('RegimenFiscalReceptor', factura['receptor']['regimen'])
     receptor.set('UsoCFDI', factura['receptor']['uso_cfdi'])
-    
+
     # Conceptos
     conceptos_elem = etree.SubElement(comprobante, '{http://www.sat.gob.mx/cfd/4}Conceptos')
-    
+
     for concepto in factura['conceptos']:
         concepto_elem = etree.SubElement(conceptos_elem, '{http://www.sat.gob.mx/cfd/4}Concepto')
         concepto_elem.set('ClaveProdServ', concepto['clave_prod_serv'])
@@ -242,48 +231,44 @@ def generar_xml_cfdi(factura: dict, uuid_origen: str, no_certificado, certificad
         concepto_elem.set('Descripcion', concepto['descripcion'])
         concepto_elem.set('ValorUnitario', f"{concepto['valor_unitario']:.2f}")
         concepto_elem.set('Importe', f"{concepto['importe']:.2f}")
-        concepto_elem.set('ObjetoImp', '02')  # Sí objeto de impuestos
-        
+        concepto_elem.set('ObjetoImp', '02')
+
         if concepto.get('descuento', Decimal('0')) > 0:
             concepto_elem.set('Descuento', f"{concepto['descuento']:.2f}")
-        
-        # Impuestos del concepto
+
         impuestos_concepto = etree.SubElement(concepto_elem, '{http://www.sat.gob.mx/cfd/4}Impuestos')
         traslados = etree.SubElement(impuestos_concepto, '{http://www.sat.gob.mx/cfd/4}Traslados')
-        
-        # Calcular base (importe - descuento)
+
         base = concepto['importe'] - concepto.get('descuento', Decimal('0'))
-        
+
         traslado = etree.SubElement(traslados, '{http://www.sat.gob.mx/cfd/4}Traslado')
         traslado.set('Base', f"{base:.2f}")
-        traslado.set('Impuesto', '002')  # IVA
+        traslado.set('Impuesto', '002')
         traslado.set('TipoFactor', 'Tasa')
         traslado.set('TasaOCuota', f"{concepto['tasa_iva']:.6f}")
         traslado.set('Importe', f"{concepto['monto_item_iva']:.2f}")
-    
+
     # Impuestos totales
     impuestos = etree.SubElement(comprobante, '{http://www.sat.gob.mx/cfd/4}Impuestos')
     impuestos.set('TotalImpuestosTrasladados', f"{factura['iva']:.2f}")
-    
+
     traslados_totales = etree.SubElement(impuestos, '{http://www.sat.gob.mx/cfd/4}Traslados')
     traslado_total = etree.SubElement(traslados_totales, '{http://www.sat.gob.mx/cfd/4}Traslado')
     traslado_total.set('Base', f"{factura['subtotal']:.2f}")
     traslado_total.set('Impuesto', '002')
     traslado_total.set('TipoFactor', 'Tasa')
-    
-    # Obtener tasa IVA del primer concepto (asumiendo que todos tienen la misma)
+
     tasa_iva = factura['conceptos'][0]['tasa_iva'] if factura['conceptos'] else Decimal('0.16')
     traslado_total.set('TasaOCuota', f"{tasa_iva:.6f}")
     traslado_total.set('Importe', f"{factura['iva']:.2f}")
-    
-    # Convertir a string XML
+
     xml_str = etree.tostring(
         comprobante,
         pretty_print=True,
         xml_declaration=True,
         encoding='UTF-8'
     ).decode('utf-8')
-    
+
     return xml_str
 
 
