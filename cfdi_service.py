@@ -130,6 +130,7 @@ def timbrar_con_pac(xml_bytes: bytes):
             "status_pac" : result.status,
             "cfdi": cfdi_bytes,
             "cadena_original": getattr(primer_resultado, 'cadenaOriginal', ''),
+            "qr_base64": base64.b64encode(primer_resultado.qrCode).decode('utf-8') if getattr(primer_resultado, 'qrCode', None) else "",
             "error": None
         }
 

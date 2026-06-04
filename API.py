@@ -25,6 +25,7 @@ import re
 import io
 import zipfile
 import pytz
+import traceback 
 
 '''
 para produccion cambiar en este archivo la ruta del certificado, key y el password de la key
@@ -139,12 +140,12 @@ def generar_respuesta_dual(xml_timbrado, tipo_comprobante, cad_original):
         }
 
 
-@app.route("/timbrar-complemento-pago2", methods=["POST"])
-def timbrar_complemento_pago2():
+@app.route("/timbrar-complemento-pago", methods=["POST"])
+def timbrar_complemento_pago():
     try:
         #Recibir
         xml_complemento = request.files.get("xml")
-        #  Leer XMLs
+        #  Leer XML
         xml_cfdi_string = xml_complemento.read().decode("utf-8")
         forma_pago = request.form.get("forma_pago")
 
@@ -200,7 +201,9 @@ def timbrar_complemento_pago2():
         # print(f"desde complemento: {xml_timbrado}")
     
     except Exception as e:
-        return jsonify({"success": False, "error": str(e)}), 500
+        tb = traceback.format_exc()
+        print(tb)
+        return jsonify({"success": False, "error": str(e), "traceback": tb}), 500
     
 
 #extraer valores emisor, receptor para crear dict
@@ -758,8 +761,8 @@ def crear_cfdi_desde_contexto(contexto: dict, certificado_path: str, key_path: s
 @app.route("/timbrar-nomina", methods=["POST"])
 def timbrar_nomina():
     try:
-        #  Recibir archivos
-        xml_nomina = request.files.get("xml")     # CFDI de nomina
+        #  Recibir archivo
+        xml_nomina = request.files.get("xml")    
 
         if not xml_nomina:
             return jsonify({"success": False, "error": "Falta el archivo CFDI origen"}), 400
@@ -919,7 +922,7 @@ def cancelar_cfdi():
         rfc_emisor = request.form.get("rfc_emisor")
         motivo_cancelacion = request.form.get("motivo_cancelacion")
         uuid_sustituto = request.form.get("uuid_sustituto", "")
-        email = "ircasarreal@telmedia.com.mx"
+        email = "correo@correo.com.mx"
 
         if not uuid or not motivo_cancelacion:
             return jsonify({"success": False, "error": "Faltan datos: uuid o motivo_cancelacion"}), 400
@@ -1004,7 +1007,6 @@ def extraer_rfcEmisor_cfdi(xml_cfdi: str) -> str:
 def timbrar_complemento_pago_params():
     try:
 
-        # file = request.files.get("file")
         xml_base64 = request.form.get("xml_base64")
 
         escritorio = obtener_escritorio()
@@ -1367,6 +1369,7 @@ def _procesar_timbrado_ingreso(file_base64: str, uuids_relacionados: list, tipo:
         "success": True,
         "mensaje_pac":          resultado_pac["mensaje_pac"],
         "status_pac":           resultado_pac.get("status_pac", ""),
+        "qr_base64":            resultado_pac.get("qr_base64", ""),
         "uuid":                 tfd.get("UUID", ""),
         "fecha_timbrado":       tfd.get("FechaTimbrado", ""),
         "sello_cfdi":           tfd.get("SelloCFD", ""),
@@ -1405,7 +1408,6 @@ def timbrar_ingreso_ruta_FM():
 
 @app.route("/timbrar-aplicacion-anticipo-ruta", methods=["POST"])
 def timbrar_aplicacion_anticipo_ruta():
-    """Migrado — ahora usa la misma lógica que /timbrar-ingreso."""
     try:
         file_base64 = request.form.get("file_filemaker_base64")
         uuid_origen = request.form.get("uuid_origen", "")
@@ -1417,7 +1419,7 @@ def timbrar_aplicacion_anticipo_ruta():
             return jsonify({"success": False, "error": "Falta el parámetro: uuid_origen"}), 400
 
         # uuid_origen sigue funcionando igual — se convierte a lista de uno
-        uuids_relacionados = [uuid_origen.strip()]
+        uuids_relacionados = [u.strip() for u in uuid_origen.split(",") if u.strip()]
 
         resultado, error = _procesar_timbrado_ingreso(file_base64, uuids_relacionados, tipo="A")
 

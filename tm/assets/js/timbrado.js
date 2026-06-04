@@ -380,17 +380,17 @@ function procesarDatosFaltantes(xml) {
 
 
 // --- ENVIAR PARA TIMBRAR ---
-function enviarParaTimbrar(xmlDom){
+function enviarParaTimbrar(xmlDom) {
     const tipoSeleccionado = getTipo();
     const xmlString = new XMLSerializer().serializeToString(xmlDom);
-    const formData = new FormData(); 
+    const formData = new FormData();
     const xmlBlob = new Blob([xmlString], { type: "text/xml" });
-    
+
     if (tipoSeleccionado === "anticipo") {
         // Para anticipo: enviar ambos XMLs
         const archivoProductos = document.getElementById("xmlProductos").files[0];
         const archivoAplicacion = document.getElementById("xmlAplicacion").files[0];
-        
+
         if (archivoProductos && archivoAplicacion) {
             formData.append("xml_archivo1", archivoProductos, "archivo1.xml");
             formData.append("xml_archivo2", archivoAplicacion, "archivo2.xml");
@@ -398,12 +398,12 @@ function enviarParaTimbrar(xmlDom){
             alert("Error: Faltan archivos XML para anticipo.");
             return;
         }
-    } else if( tipoSeleccionado === "complemento" || tipoSeleccionado === "nomina" || tipoSeleccionado === "ingreso") {
+    } else if (tipoSeleccionado === "complemento" || tipoSeleccionado === "nomina" || tipoSeleccionado === "ingreso") {
         // Para complemento: enviar un XML
+        console.log(xmlBlob)
         formData.append("xml", xmlBlob, "factura.xml");
-        // console.log(xmlBlob)
     }
-    
+
     // Agregar forma de pago seleccionada
     let formaPagoSeleccionada;
     if (tipoSeleccionado === "anticipo") {
@@ -411,23 +411,24 @@ function enviarParaTimbrar(xmlDom){
     } else {
         formaPagoSeleccionada = document.getElementById("formaPago").value || "03";
     }
-    
-    const formaPagoTexto = tipoSeleccionado === "anticipo" ? 
-        "99: Por definir (Aplicación de Anticipo)" : 
+
+    const formaPagoTexto = tipoSeleccionado === "anticipo" ?
+        "99: Por definir (Aplicación de Anticipo)" :
         document.getElementById("formaPago").options[document.getElementById("formaPago").selectedIndex]?.text || "03: Transferencia electrónica de fondos";
-    
+
     formData.append("forma_pago", formaPagoSeleccionada);
 
     // Determinar endpoint según el tipo seleccionado
     let endpoint;
     if (tipoSeleccionado === "complemento") {
-    // tm7.telmedia.com.mx
-        endpoint = "https://127.0.0.1:5001/timbrar-complemento-pago2"; 
+        // tm7.telmedia.com.mx
+
+        endpoint = "https://127.0.0.1:5001/timbrar-complemento-pago";
     } else if (tipoSeleccionado === "anticipo") {
         endpoint = "https://127.0.0.1:5001/timbrar-aplicacion-anticipo";
-    } else if(tipoSeleccionado === "nomina"){
+    } else if (tipoSeleccionado === "nomina") {
         endpoint = "https://127.0.0.1:5001/timbrar-nomina";
-    } else if(tipoSeleccionado === "ingreso"){
+    } else if (tipoSeleccionado === "ingreso") {
         endpoint = "https://127.0.0.1:5001/timbrar-ingreso";
     } else {
         alert("Selecciona un tipo válido.");
@@ -435,101 +436,108 @@ function enviarParaTimbrar(xmlDom){
     }
 
     fetch(endpoint, {
-        method:"POST",
-        body:formData
+        method: "POST",
+        body: formData
     })
-    .then(r => {
-        // Verificar si el servidor respondió con error HTTP
-        if (!r.ok) {
-            return r.json().then(data => {
-                throw new Error(data.error || `Error del servidor (${r.status})`);
-            });
-        }
-        return r.json();
-    })
-    .then(data => {
-        // Verificar si hay error en la respuesta JSON
-        if (!data.success) {
-            alert(" Error al timbrar:\n\n" + (data.error || "Error desconocido"));
-            return;
-        }
-
-        let archivosDescargados = 0;
-        let mensajes = [];
-
-        // Descargar el XML timbrado
-        if(data.xml) {
-            const xmlBytes = atob(data.xml);
-            const xmlBlob = new Blob([xmlBytes], { type: "text/xml" });
-            const xmlUrl = URL.createObjectURL(xmlBlob);
-            const xmlLink = document.createElement("a");
-            xmlLink.href = xmlUrl;
-            xmlLink.download = data.xml_filename || `CFDI_${tipoSeleccionado}_Timbrado.xml`;
-            xmlLink.click();
-            URL.revokeObjectURL(xmlUrl);
-            archivosDescargados++;
-            mensajes.push("XML descargado");
-        }
-
-        // Descargar el XML timbrado
-        if (data.xml_timbrado) {
-            const xmlBase64 = data.xml_timbrado;
-
-            // Decodificar base64 → bytes
-            const binaryString = atob(xmlBase64);
-            const len = binaryString.length;
-            const bytes = new Uint8Array(len);
-
-            for (let i = 0; i < len; i++) {
-                bytes[i] = binaryString.charCodeAt(i);
+        .then(r => {
+            const contentType = r.headers.get("content-type");
+            if (!r.ok) {
+                if (contentType && contentType.includes("application/json")) {
+                    return r.json().then(data => {
+                        throw new Error(data.error || `Error del servidor (${r.status})`);
+                    });
+                } else {
+                    // El servidor devolvió HTML (error 500 de Flask/servidor)
+                    return r.text().then(html => {
+                        throw new Error(`Error del servidor (${r.status}) — respuesta no es JSON`);
+                    });
+                }
+            }
+            return r.json();
+        })
+        .then(data => {
+            // Verificar si hay error en la respuesta JSON
+            if (!data.success) {
+                alert(" Error al timbrar:\n\n" + (data.error || "Error desconocido"));
+                return;
             }
 
-            const xmlBlob = new Blob([bytes], { type: "text/xml;charset=utf-8;" });
-            const xmlUrl = URL.createObjectURL(xmlBlob);
+            let archivosDescargados = 0;
+            let mensajes = [];
 
-            const xmlLink = document.createElement("a");
-            xmlLink.href = xmlUrl;
-            xmlLink.download = `CFDI_${tipoSeleccionado}_Timbrado.xml`;
-            document.body.appendChild(xmlLink);
-            xmlLink.click();
-            document.body.removeChild(xmlLink);
+            // Descargar el XML timbrado
+            if (data.xml) {
+                const xmlBytes = atob(data.xml);
+                const xmlBlob = new Blob([xmlBytes], { type: "text/xml" });
+                const xmlUrl = URL.createObjectURL(xmlBlob);
+                const xmlLink = document.createElement("a");
+                xmlLink.href = xmlUrl;
+                xmlLink.download = data.xml_filename || `CFDI_${tipoSeleccionado}_Timbrado.xml`;
+                xmlLink.click();
+                URL.revokeObjectURL(xmlUrl);
+                archivosDescargados++;
+                mensajes.push("XML descargado");
+            }
 
-            URL.revokeObjectURL(xmlUrl);
-        }
+            // Descargar el XML timbrado
+            if (data.xml_timbrado) {
+                const xmlBase64 = data.xml_timbrado;
 
-        // Descargar el PDF si existe
-        if(data.pdf) {
-            const pdfBytes = atob(data.pdf);
-            const pdfBlob = new Blob([pdfBytes], { type: "application/pdf" });
-            const pdfUrl = URL.createObjectURL(pdfBlob);
-            const pdfLink = document.createElement("a");
-            pdfLink.href = pdfUrl;
-            pdfLink.download = data.pdf_filename || `CFDI_${tipoSeleccionado}_Factura.pdf`;
-            pdfLink.click();
-            URL.revokeObjectURL(pdfUrl);
-            archivosDescargados++;
-            mensajes.push("PDF descargado");
-        } else if(data.pdf_error) {
-            // console.warn("Error generando PDF:", data.pdf_error);
-            mensajes.push("PDF no disponible: " + data.pdf_error);
-        }
+                // Decodificar base64 → bytes
+                const binaryString = atob(xmlBase64);
+                const len = binaryString.length;
+                const bytes = new Uint8Array(len);
 
-        // Mensaje de éxito
-        let mensaje = `CFDI ${tipoSeleccionado} Timbrado exitosamente.\n`;
-        
-        // Solo mostrar forma de pago si es complemento de pago
-        if (tipoSeleccionado === "complemento") {
-            mensaje += `Forma de pago aplicada: ${formaPagoTexto}\n`;
-        }
-        
-        mensaje += mensajes.join(", ");
-        
-        alert(mensaje);
-    })
-    .catch(err=>{
-        // console.error("Error enviando a timbrar:", err);
-        alert("Error enviando a timbrar: " + err.message);
-    });
+                for (let i = 0; i < len; i++) {
+                    bytes[i] = binaryString.charCodeAt(i);
+                }
+
+                const xmlBlob = new Blob([bytes], { type: "text/xml;charset=utf-8;" });
+                const xmlUrl = URL.createObjectURL(xmlBlob);
+
+                const xmlLink = document.createElement("a");
+                xmlLink.href = xmlUrl;
+                xmlLink.download = `CFDI_${tipoSeleccionado}_Timbrado.xml`;
+                document.body.appendChild(xmlLink);
+                xmlLink.click();
+                document.body.removeChild(xmlLink);
+
+                URL.revokeObjectURL(xmlUrl);
+            }
+
+            // Descargar el PDF si existe
+            if (data.pdf) {
+                const pdfBytes = atob(data.pdf);
+                const pdfBlob = new Blob([pdfBytes], { type: "application/pdf" });
+                const pdfUrl = URL.createObjectURL(pdfBlob);
+                const pdfLink = document.createElement("a");
+                pdfLink.href = pdfUrl;
+                pdfLink.download = data.pdf_filename || `CFDI_${tipoSeleccionado}_Factura.pdf`;
+                pdfLink.click();
+                URL.revokeObjectURL(pdfUrl);
+                archivosDescargados++;
+                mensajes.push("PDF descargado");
+            } else if (data.pdf_error) {
+                // console.warn("Error generando PDF:", data.pdf_error);
+                mensajes.push("PDF no disponible: " + data.pdf_error);
+            }
+
+            // Mensaje de éxito
+            let mensaje = `CFDI ${tipoSeleccionado} Timbrado exitosamente.\n`;
+
+            // Solo mostrar forma de pago si es complemento de pago
+            if (tipoSeleccionado === "complemento") {
+                mensaje += `Forma de pago aplicada: ${formaPagoTexto}\n`;
+            }
+
+            mensaje += mensajes.join(", ");
+
+            alert(mensaje);
+        })
+        .catch(err => {
+            // console.error("Error enviando a timbrar:", err);
+            alert("Error enviando a timbrar: " + err.message);
+        });
 }
 
 // Al cargar XML, extraer UUID y RFC automáticamente
