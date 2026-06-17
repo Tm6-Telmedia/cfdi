@@ -569,7 +569,6 @@ def timbrar_aplicacion_anticipo():
             xml_anticipo=xml_filemaker_string.encode('utf-8'),
             cad_original_pac=cadena_original
         )
-
         guardar_pdf(pdf_bytes, tipo_comprobante="anticipo")
         pdf_base64 = base64.b64encode(pdf_bytes).decode('utf-8')
 

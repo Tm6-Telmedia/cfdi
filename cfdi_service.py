@@ -139,7 +139,6 @@ def timbrar_con_pac(xml_bytes: bytes):
         print(error_msg)
         return {"cfdi": None, "cadena_original": "", "error": error_msg}
 
-
 def generar_xml_timbrado(xml_timbrado: bytes):
     try:
         # Preparar respuesta
