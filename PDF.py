@@ -1627,3 +1627,4 @@ def generar_pdf_factura(xml_timbrado: bytes, tipo_comprobante: str, xml_anticipo
         
     except Exception as e:
         raise PDFGenerationError(f"Error generando PDF: {str(e)}")
+    
