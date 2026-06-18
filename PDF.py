@@ -205,6 +205,7 @@ class CFDIData:
     sello_cfdi: str = ""  # Sello del CFDI (diferente al del SAT)
     rfc_prov_certif: str = ""  # RFC del proveedor de certificación
     uuid_relacionado: str = ""  # UUID del documento relacionado (para aplicación de anticipo)
+    uuids_relacionados: List[str] = None  # Lista de UUIDs relacionados (para varios uuids relacionados)
     no_certificado_sat: str = ""  # Número de certificado del SAT
     emisor_direccion: str = ""
     emisor_contacto: str = ""
@@ -216,6 +217,10 @@ class CFDIData:
     datos_complemento_pago: Optional[ComplementoPagoData] = None
     datos_aplicacion_anticipo: Optional[AplicacionAnticipoData] = None
     documentos_relacionados: List[DocumentoRelacionadoData] = None
+
+def __post_init__(self):
+    if self.uuids_relacionados is None:
+        self.uuids_relacionados = []
 
 def obtener_descripcion_clave_prod_serv(clave: str) -> str:
     """Obtiene la descripción de la clave de producto/servicio"""
@@ -770,14 +775,15 @@ def extraer_datos_xml(xml_bytes: bytes) -> CFDIData:
             )
         
         # Buscar UUID relacionado en CfdiRelacionados
-        uuid_relacionado = ""
+        uuids_relacionados = []
         for elem in tree.iter():
             if elem.tag.endswith("CfdiRelacionado"):
-                uuid_relacionado = elem.get("UUID") or ""
-                if uuid_relacionado:
-                    print(f" UUID relacionado encontrado: {uuid_relacionado}")
-                    break
-        
+                uuid = elem.get("UUID") or ""
+                if uuid:
+                    uuids_relacionados.append(uuid)
+
+        uuid_relacionado = uuids_relacionados[0] if uuids_relacionados else ""        
+
         return CFDIData(
             folio_fiscal=folio_fiscal,
             metodo_pago=metodo_pago,
@@ -807,6 +813,7 @@ def extraer_datos_xml(xml_bytes: bytes) -> CFDIData:
             documentos_relacionados=documentos_relacionados,
             uuid=uuid,
             uuid_relacionado=uuid_relacionado,  # Agregar UUID relacionado
+            uuids_relacionados=uuids_relacionados,  # Agregar lista de UUIDs relacionados
             fecha_timbrado=fecha_timbrado,
             sello_sat=sello_sat,
             sello_cfdi=sello_cfdi,
@@ -1508,8 +1515,11 @@ def generar_pdf_factura(xml_timbrado: bytes, tipo_comprobante: str, xml_anticipo
         y_position -= 3
         
         # SECCIÓN FISCAL INFERIOR 
-        y_position -= 250  # Aumentado de 220 a 250 para mover los totales más abajo
-        
+        # Calcular espacio extra según número de UUIDs relacionados
+        uuids_count = len(cfdi_data.uuids_relacionados) if cfdi_data.uuids_relacionados else 0
+        espacio_extra = (uuids_count - 1) * 12 if uuids_count > 1 else 0
+        y_position -= (250 + espacio_extra)
+                
         # Primera línea: Folio fiscal relacionado y Tipo de relación (datos reales del XML)
         # Para complementos de pago, buscar el documento relacionado
         folio_relacionado = "N/A"
@@ -1522,12 +1532,14 @@ def generar_pdf_factura(xml_timbrado: bytes, tipo_comprobante: str, xml_anticipo
             # Para otros tipos, usar el UUID del propio documento
             folio_relacionado = cfdi_data.uuid if cfdi_data.uuid else "N/A"
         
-        draw_label_with_content(c, 50, y_position, "Folio fiscal relacionado: ", folio_relacionado, 7)
-        
-        # Agregar "Tipo de relación:" solo para aplicación de anticipo
-        if cfdi_data.tipo_comprobante == "I" and cfdi_data.uuid_relacionado:
-            y_position -= 12  # Espacio entre folio relacionado y tipo de relación
-            draw_label_with_content(c, 50, y_position, "Tipo de relación: ", "CFDI por aplicación de anticipo", 7)
+        if cfdi_data.tipo_comprobante == "I" and cfdi_data.uuids_relacionados:
+            draw_label_with_content(c, 50, y_position, "Tipo de relación: ", "07 - CFDI por aplicación de anticipo", 7)
+            y_position -= 12
+            for uuid in cfdi_data.uuids_relacionados:
+                draw_label_with_content(c, 50, y_position, "Folio fiscal relacionado: ", uuid, 7)
+                y_position -= 12
+        else:
+            draw_label_with_content(c, 50, y_position, "Folio fiscal relacionado: ", folio_relacionado, 7)
         
         # Total con letra - PRIMERO (guardar posición para alinear totales)
         # Espacio adicional solo para aplicación de anticipo
