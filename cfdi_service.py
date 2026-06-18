@@ -186,8 +186,13 @@ def generar_xml_cfdi(factura: dict, uuids_relacionados: list, no_certificado, ce
     comprobante.set('NoCertificado', no_certificado)
     comprobante.set('Certificado', certificado_base64)
     comprobante.set('SubTotal', f"{factura['subtotal']:.2f}")
-    comprobante.set('Moneda', 'MXN')
-    comprobante.set('TipoCambio', '1')
+    
+    # Usar moneda y tipo de cambio dinámicamente
+    moneda = factura.get('moneda', 'MXN')
+    tipo_cambio = factura.get('tipo_cambio', '1')
+    comprobante.set('Moneda', moneda)
+    comprobante.set('TipoCambio', tipo_cambio)
+    
     comprobante.set('Total', f"{factura['total']:.2f}")
     comprobante.set('TipoDeComprobante', 'I')
     comprobante.set('Exportacion', '01')

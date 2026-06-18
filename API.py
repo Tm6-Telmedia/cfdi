@@ -717,6 +717,26 @@ def parse_filemaker_xml(xml_str: str) -> dict:
             "monto_item_iva":  to_decimal(montos_iva[i]),
         })
 
+    # Extraer moneda y tipo de cambio
+    moneda_simbolo = get_text(first, "Moneda_Simbolo").strip()
+    tipo_cambio = get_text(first, "TipoCambio").strip()
+    
+    # Mapear símbolo de moneda a código CFDI
+    moneda_cfdi = 'MXN'
+    if moneda_simbolo:
+        if moneda_simbolo.upper() in ['USD', 'DÓLAR', 'DOLAR']:
+            moneda_cfdi = 'USD'
+        elif moneda_simbolo.upper() in ['MXN', 'PESOS', 'PESO']:
+            moneda_cfdi = 'MXN'
+    
+    # Tipo de cambio: 1 para MXN, valor real para USD
+    tipo_cambio_final = '1'
+    if moneda_cfdi == 'USD' and tipo_cambio:
+        try:
+            tipo_cambio_final = f"{float(tipo_cambio):.4f}"
+        except ValueError:
+            tipo_cambio_final = '1'
+    
     factura = {
         "emisor": {
             "rfc":     get_text(first, "Emisor_RFC"),
@@ -736,6 +756,8 @@ def parse_filemaker_xml(xml_str: str) -> dict:
         "folio":       get_text(first, "folio"),
         "metodo_pago": get_text(first, "Metodo_de_pago"),
         "forma_pago":  get_text(first, "Forma_de_pago"),
+        "moneda":      moneda_cfdi,
+        "tipo_cambio": tipo_cambio_final,
         "subtotal":    to_decimal(get_text(first, "Subtotal")),
         "iva":         to_decimal(get_text(first, "Iva")),  
         "total":       to_decimal(get_text(first, "Total")),
