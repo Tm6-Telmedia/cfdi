@@ -178,9 +178,8 @@ def generar_xml_cfdi(factura: dict, uuids_relacionados: list, no_certificado, ce
     comprobante.set('Sello', '')
 
     metodo_pago = factura.get('metodo_pago', '')
+    # Usar forma_pago dinámicamente del XML sin sobrescrituras
     forma_pago = factura.get('forma_pago', '')
-    if metodo_pago == 'PPD':
-        forma_pago = '99'
 
     comprobante.set('FormaPago', forma_pago)
     comprobante.set('NoCertificado', no_certificado)
