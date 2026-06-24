@@ -16,9 +16,13 @@ para produccion cambiar PAC_WSDL, PAC_USER  y PAC_PASSWORD
 '''
 
 # Configuración del PAC modo test
-PAC_WSDL = "https://testing.solucionfactible.com/ws/services/Timbrado?wsdl"
-PAC_USER = "testing@solucionfactible.com"
-PAC_PASSWORD = "timbrado.SF.16672"
+# PAC_WSDL = "https://testing.solucionfactible.com/ws/services/Timbrado?wsdl"
+# PAC_USER = "testing@solucionfactible.com"
+# PAC_PASSWORD = "timbrado.SF.16672"
+
+PAC_WSDL = os.getenv("PAC_WSDL")
+PAC_USER = os.getenv("PAC_USER") 
+PAC_PASSWORD = os.getenv("PAC_PASSWORD")
 
 # PAC_WSDL_CANCELAR = "https://testing.solucionfactible.com/ws/services/Cancelacion?wsdl"
 

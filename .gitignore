@@ -1,2 +1,6 @@
 __pycache__
-venv
+.env
+
+*.cer
+*.key
+*.pem

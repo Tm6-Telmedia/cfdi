@@ -1,6 +1,8 @@
 """
 DEPENDENCIAS QUE REQUIEREN INSTALACIÓN:
-pip install Flask==3.0.0 flask-cors==4.0.0 lxml==5.1.0 zeep==4.2.1 cryptography==41.0.7
+pip install Flask==3.0.0 flask-cors==4.0.0 lxml==5.1.0 zeep==4.2.1 cryptography==41.0.7 python-dotenv==1.2.2, qrcode==  legacy-cgi
+o tambien se puede instalar las dependencias desde el archivo requirements.txt con el comando:
+pip install -r requirements.txt (si se ejecuta en global puede reescribir otras versiones de paquetes)
 """
 from flask import Flask, request, jsonify
 from lxml import etree
@@ -17,6 +19,7 @@ import os
 import ctypes.wintypes
 from flask_cors import CORS
 from flask import send_file
+from dotenv import load_dotenv
 # from xml.dom.minidom import parseString
 from decimal import Decimal
 # from typing import List, Optional
@@ -36,11 +39,19 @@ context = ssl.SSLContext(ssl.PROTOCOL_TLS_SERVER)
 context.load_cert_chain(certfile='tm7_combined.pem')  # Certificado + clave combinados
 
 # CONFIGURACIÓN GENERAL modo test
-RUTA_CER = r"CSD_Sucursal_1_EKU9003173C9_20230517_223850.cer"
-RUTA_KEY = r"CSD_Sucursal_1_EKU9003173C9_20230517_223850.key"
-PASSWORD_KEY = b"12345678a"
-RUTA_XSLT = r"xslt\cadenaoriginal_4_0.xslt"
-SALIDA_DIR = r"TimbradoSalida"
+# RUTA_CER = r"CSD_Sucursal_1_EKU9003173C9_20230517_223850.cer"
+# RUTA_KEY = r"CSD_Sucursal_1_EKU9003173C9_20230517_223850.key"
+# PASSWORD_KEY = b"12345678a"
+# RUTA_XSLT = r"xslt\cadenaoriginal_4_0.xslt"
+# SALIDA_DIR = r"TimbradoSalida"
+
+load_dotenv()  # Cargar variables de entorno desde el archivo .env
+
+RUTA_CER = os.getenv("RUTA_CER")
+RUTA_KEY = os.getenv("RUTA_KEY")
+PASSWORD_KEY = os.getenv("PASSWORD_KEY")
+RUTA_XSLT = os.getenv("RUTA_XSLT")
+SALIDA_DIR = os.getenv("SALIDA_DIR")
 
 app = Flask(__name__)
 CORS(app)
@@ -1105,6 +1116,7 @@ def timbrar_complemento_pago_params():
         error_pac = resultado_pac["error"]
         xml_timbrado_tuple = resultado_pac["cfdi"]
         cadena_original = resultado_pac["cadena_original"]
+        qr_base64 = resultado_pac["qr_base64"]
 
         if error_pac:
             return jsonify({"success": False, "error": f"Error del PAC: {error_pac}"}), 422
@@ -1154,6 +1166,7 @@ def timbrar_complemento_pago_params():
             "cadena_original": cadena_original,
             "xml_timbrado_base64": base64.b64encode(xml_timbrado_bytes).decode('utf-8'),
             "pdf_base64": base64.b64encode(pdf_bytes).decode('utf-8'),
+            "qr_base64": qr_base64,
             "nombre_xml": f"CFDI_{nombre_archivo}.xml",
             "nombre_pdf": f"CFDI_{nombre_archivo}.pdf"
         }), 200
